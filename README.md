@@ -38,23 +38,30 @@ Local and network search share one regex-based engine and one set of
 result tabs — there's no separate "network search mode" with its own
 glob patterns, the way the original two apps worked.
 
+- **Start tab**: a quick-access dashboard, not a full picker — abbreviated
+  Files/Containing fields and a "Search Now" button, a one-line summary of
+  the current search locations with a "Browse for a folder..." shortcut,
+  and your most recent results, all persisted across restarts with a
+  Clear History button. "Open Search Builder"/"Open Search Locations"
+  links jump to the full versions for anything more elaborate.
+- **Search Builder tab**: filename and content regex search (with a
+  ripgrep fast path when installed, falling back to a worker-pool walk
+  otherwise), a graphical regex builder, file-type quick filters, context
+  lines, size filters, and glob exclude patterns.
 - **Search Locations tab**: the main content is a tree of local drives
   (labeled Internal/Removable/SD Card) and their subfolders, each with a
   checkbox — checking a drive cascades to its expanded subfolders, but any
   subfolder can be individually re-checked/unchecked. A sidebar controls
   which location types to search (local drives / SMB shares / NFS
   exports) and the SMB/NFS network range and credentials.
-- **Search Builder tab**: filename and content regex search (with a
-  ripgrep fast path when installed, falling back to a worker-pool walk
-  otherwise), a graphical regex builder, file-type quick filters, context
-  lines, size filters, and glob exclude patterns.
 - **Results tab**: one sortable list (Name / Location / Modified / Size)
   across every matched file, local or network, with a content-match
   preview pane and the usual open/open-with/show-in-file-manager/copy-
   path/favorite/delete actions.
 - **Favorite Results tab**: categorized favorites with add/rename/move/
   delete categories and reordering.
-- **Stored Searches**: save/load/delete named filename/content patterns.
+- **Favorite Searches tab**: save/load/delete named filename/content
+  patterns.
 - PDF and DOCX content extraction are built in (no external dependency
   required); `ripgrep` and `pdftotext` are optional speed/quality boosts,
   auto-detected with a per-distro install-command dialog if missing.

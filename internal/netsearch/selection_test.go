@@ -71,6 +71,19 @@ func TestRootsSkipsRedundantNestedChecked(t *testing.T) {
 	}
 }
 
+func TestClearResetsSelection(t *testing.T) {
+	s := NewPathSelection()
+	s.SetCascade("/mnt/DriveG", true)
+	s.Clear()
+	if s.Effective("/mnt/DriveG") {
+		t.Error("expected Clear to reset the drive back to unchecked")
+	}
+	roots, excludes := s.Roots()
+	if len(roots) != 0 || len(excludes) != 0 {
+		t.Errorf("expected no roots/excludes after Clear, got roots=%v excludes=%v", roots, excludes)
+	}
+}
+
 func containsStr(list []string, s string) bool {
 	for _, v := range list {
 		if v == s {

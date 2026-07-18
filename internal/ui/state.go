@@ -47,11 +47,12 @@ type App struct {
 	// favorite/context-menu actions.
 	searchResults []model.FileResult
 
-	start     *startTab
-	locations *locationsTab
-	builder   *searchBuilderTab
-	results   *resultsTab
-	favTab    *favoritesTab
+	start       *startTab
+	builder     *searchBuilderTab
+	locations   *locationsTab
+	results     *resultsTab
+	favTab      *favoritesTab
+	favSearches *favoriteSearchesTab
 }
 
 // runOnUI marshals fn onto the Fyne UI goroutine. Every mutation of a

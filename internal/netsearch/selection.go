@@ -18,6 +18,12 @@ func NewPathSelection() *PathSelection {
 	return &PathSelection{explicit: map[string]bool{}}
 }
 
+// Clear removes every explicit checked/unchecked override, resetting the
+// selection to its default (everything unchecked/inherited).
+func (s *PathSelection) Clear() {
+	s.explicit = map[string]bool{}
+}
+
 // SetCascade sets path's explicit state and applies the same state to
 // every already-known path nested under it.
 func (s *PathSelection) SetCascade(path string, checked bool) {

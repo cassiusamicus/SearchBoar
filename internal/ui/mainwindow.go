@@ -49,19 +49,37 @@ type toolbarWidgetItem struct{ obj fyne.CanvasObject }
 func (t toolbarWidgetItem) ToolbarObject() fyne.CanvasObject { return t.obj }
 
 func (a *App) buildMainWindow() {
-	a.start = newStartTab(a)
-	a.locations = newLocationsTab(a)
+	// Constructed (and built) in dependency order: startTab.build() reads
+	// widget state from builder/locations, so those must already be built.
 	a.builder = newSearchBuilderTab(a)
+	a.locations = newLocationsTab(a)
 	a.results = newResultsTab(a)
 	a.favTab = newFavoritesTab(a)
+	a.favSearches = newFavoriteSearchesTab(a)
+	a.start = newStartTab(a)
 
+	builderContent := a.builder.build()
+	locationsContent := a.locations.build()
+	resultsContent := a.results.build()
+	favContent := a.favTab.build()
+	favSearchesContent := a.favSearches.build()
+	startContent := a.start.build()
+
+	// Visual tab order (independent of the build order above).
+	startItem := container.NewTabItem("Start", startContent)
 	a.tabs = container.NewAppTabs(
-		container.NewTabItem("Start", a.start.build()),
-		container.NewTabItem("Search Locations", a.locations.build()),
-		container.NewTabItem("Search Builder", a.builder.build()),
-		container.NewTabItem("Results", a.results.build()),
-		container.NewTabItem("Favorite Results", a.favTab.build()),
+		startItem,
+		container.NewTabItem("Search Builder", builderContent),
+		container.NewTabItem("Search Locations", locationsContent),
+		container.NewTabItem("Results", resultsContent),
+		container.NewTabItem("Favorite Results", favContent),
+		container.NewTabItem("Favorite Searches", favSearchesContent),
 	)
+	a.tabs.OnSelected = func(item *container.TabItem) {
+		if item == startItem {
+			a.start.refresh()
+		}
+	}
 
 	a.statusBar = widget.NewLabel("Ready")
 	a.progressBar = widget.NewProgressBar()
