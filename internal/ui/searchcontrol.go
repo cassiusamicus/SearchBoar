@@ -223,6 +223,13 @@ func (a *App) finishSearch(err error, filePattern string, searchPaths []string) 
 		a.results.stopBtn.Disable()
 		a.progressBar.Hide()
 		a.cancelSearch = nil
+		// Results stream in during the search in arrival order (see
+		// addResult) rather than being fully re-sorted after every single
+		// one -- rebuilding every result card on every arrival would get
+		// slower as the result set grows. The real sort order (default:
+		// Number of Hits) is applied once here, whether the search
+		// finished, errored, or was stopped early with partial results.
+		a.results.resort()
 		if err != nil && err != context.Canceled {
 			a.statusBar.SetText("Search error: " + err.Error())
 			return

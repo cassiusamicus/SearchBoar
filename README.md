@@ -70,14 +70,15 @@ glob patterns, the way the original two apps worked.
   the Search Locations tab's Workspaces card. A matching quick-select
   dropdown on the Start tab applies a saved workspace in one click without
   a trip to the full tab.
-- **Detailed Results tab**: a file list on the left (sortable by Number of
-  Hits/Name/Location/Modified/Size — Number of Hits, most first, is the
-  default) and a preview of the selected file's matches on the right —
-  highlighted, wrapped context lines, Prev/Next buttons to step through
-  every result without returning to the list, and Open/Actions buttons
-  for the usual open/open-with/show-in-file-manager/copy-path/favorite/
-  delete actions. A Stop button on the tab itself cancels a search
-  mid-run.
+- **Detailed Results tab**: every result as a card in one scrolling column
+  (sortable by Number of Hits/Name/Location/Modified/Size — Number of
+  Hits, most first, is the default) — filename, path/date/size, and every
+  content match highlighted and wrapped, all visible without clicking
+  anything. Prev/Next buttons in the header (above the list, since they
+  page through every result found) scroll the next/previous card into
+  view and highlight it; Open/Actions buttons on each card cover the
+  usual open/open-with/show-in-file-manager/copy-path/favorite/delete
+  actions. A Stop button on the tab itself cancels a search mid-run.
 - **Favorite Results tab**: categorized favorites with add/rename/move/
   delete categories and reordering.
 - **Favorite Searches tab**: save/load/delete named filename/content
