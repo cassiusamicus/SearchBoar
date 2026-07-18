@@ -9,12 +9,16 @@ func (c *Config) loadRecent(doc *iniDoc) {
 	if v, ok := doc.get(sectionRecent, "content_patterns"); ok {
 		c.Recent.ContentPatterns = splitPipe(v)
 	}
+	if v, ok := doc.get(sectionRecent, "last_file_pattern"); ok {
+		c.Recent.LastFilePattern = v
+	}
 }
 
 func (c *Config) saveRecent(doc *iniDoc) {
 	sec := doc.section(sectionRecent)
 	sec.set("paths", joinPipe(c.Recent.Paths))
 	sec.set("content_patterns", joinPipe(c.Recent.ContentPatterns))
+	sec.set("last_file_pattern", c.Recent.LastFilePattern)
 }
 
 // AddPath records dir as the most-recently-used search directory, capped at

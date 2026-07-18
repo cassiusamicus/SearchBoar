@@ -92,3 +92,15 @@ func (t *locationsTab) excludeDirsFor(root string) []string {
 func (t *locationsTab) anyLocationSelected() bool {
 	return t.localCheck.Checked || t.smbCheck.Checked || t.nfsCheck.Checked
 }
+
+// restoreCheckedPaths pre-checks the picker with the locations used by the
+// last search (loaded from config), so the Search Locations tab reflects
+// them even before the user expands the tree to see the actual nodes.
+func (t *locationsTab) restoreCheckedPaths(paths []string) {
+	for _, p := range paths {
+		t.picker.selection.SetCascade(p, true)
+	}
+	if t.picker.tree != nil {
+		t.picker.tree.Refresh()
+	}
+}

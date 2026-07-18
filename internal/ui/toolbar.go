@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	tabIndexLocations = iota
+	tabIndexStart = iota
+	tabIndexLocations
 	tabIndexBuilder
 	tabIndexResults
 	tabIndexFavorites
@@ -23,7 +24,7 @@ func (a *App) buildToolbar() *widget.Toolbar {
 	t := widget.NewToolbar(
 		toolbarWidgetItem{obj: wordmark()},
 		widget.NewToolbarSeparator(),
-		widget.NewToolbarAction(theme.HomeIcon(), func() { a.tabs.SelectIndex(tabIndexLocations) }),
+		widget.NewToolbarAction(theme.HomeIcon(), func() { a.tabs.SelectIndex(tabIndexStart) }),
 		a.searchButton,
 		widget.NewToolbarAction(theme.DocumentIcon(), func() { a.showStoredSearchesDialog() }),
 		widget.NewToolbarAction(theme.ListIcon(), func() { a.tabs.SelectIndex(tabIndexFavorites) }),

@@ -45,6 +45,7 @@ func Run() {
 
 	a.buildMainWindow()
 	a.restoreWindowGeometry()
+	a.restoreLastSearch()
 	go a.checkDependenciesOnStartup()
 
 	a.win.SetCloseIntercept(func() {

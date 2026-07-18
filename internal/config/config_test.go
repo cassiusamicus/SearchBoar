@@ -148,3 +148,26 @@ func TestRecentConfigAddContentPatternIgnoresEmpty(t *testing.T) {
 		t.Errorf("expected empty pattern to be ignored, got %v", r.ContentPatterns)
 	}
 }
+
+func TestRecentResultsAndLastFilePatternRoundTrip(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	cfg.Recent.LastFilePattern = `\.go$`
+	cfg.RecentResults = []RecentResult{
+		{Path: "/a.go", Modified: "2026-01-01 00:00:00", SizeBytes: 100, SizeHuman: "100 B"},
+		{Path: "/tmp/mnt/b.go", DisplayPath: "//host/share/b.go", Modified: "2026-01-02 00:00:00", SizeBytes: 200, SizeHuman: "200 B"},
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Recent.LastFilePattern != `\.go$` {
+		t.Errorf("LastFilePattern = %q, want %q", reloaded.Recent.LastFilePattern, `\.go$`)
+	}
+	if !reflect.DeepEqual(reloaded.RecentResults, cfg.RecentResults) {
+		t.Errorf("RecentResults = %+v, want %+v", reloaded.RecentResults, cfg.RecentResults)
+	}
+}

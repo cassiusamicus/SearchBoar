@@ -16,6 +16,7 @@ const (
 	MaxRecentPaths           = 5
 	MaxRecentContentPatterns = 10
 	MaxFavorites             = 100
+	MaxRecentResults         = 10
 )
 
 // Config is the fully-parsed, in-memory representation of config.ini.
@@ -29,11 +30,27 @@ type Config struct {
 	FavoriteCategoryOrder []string
 	FavoriteSearches      map[string]StoredSearch
 	CustomPrograms        map[string]string
+	RecentResults         []RecentResult
 }
 
 type RecentConfig struct {
+	// Paths holds the search locations used by the most recently run
+	// search (not a rolling history despite the name -- see AddPath vs.
+	// direct assignment), shown on the Start tab.
 	Paths           []string
 	ContentPatterns []string
+	LastFilePattern string
+}
+
+// RecentResult is a lightweight (no content-match text) record of one
+// file found by the most recently completed search, shown on the Start
+// tab so recent results survive an app restart.
+type RecentResult struct {
+	Path        string
+	DisplayPath string
+	Modified    string
+	SizeBytes   int64
+	SizeHuman   string
 }
 
 // WindowState mirrors the original app's convention: X/Y default to -1 to
@@ -106,6 +123,7 @@ func Load(path string) (*Config, error) {
 	cfg.loadFavorites(doc)
 	cfg.loadFavoriteSearches(doc)
 	cfg.loadCustomPrograms(doc)
+	cfg.loadRecentResults(doc)
 	return cfg, nil
 }
 
@@ -123,6 +141,7 @@ func (c *Config) Save() error {
 	c.saveFavorites(doc)
 	c.saveFavoriteSearches(doc)
 	c.saveCustomPrograms(doc)
+	c.saveRecentResults(doc)
 
 	tmp, err := os.CreateTemp(filepath.Dir(c.path), ".config-*.ini.tmp")
 	if err != nil {

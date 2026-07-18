@@ -47,6 +47,7 @@ type App struct {
 	// favorite/context-menu actions.
 	searchResults []model.FileResult
 
+	start     *startTab
 	locations *locationsTab
 	builder   *searchBuilderTab
 	results   *resultsTab

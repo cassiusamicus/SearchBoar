@@ -79,6 +79,17 @@ func (a *App) startSearch() {
 	go a.runUnifiedSearch(ctx, base, locOpts)
 }
 
+// restoreLastSearch pre-fills the Search Builder's filename pattern and
+// pre-checks the Search Locations tree with whatever the most recently
+// completed search used, loaded from config -- so the Start tab isn't the
+// only place that remembers.
+func (a *App) restoreLastSearch() {
+	if a.cfg.Recent.LastFilePattern != "" {
+		a.builder.fileEntry.SetText(a.cfg.Recent.LastFilePattern)
+	}
+	a.locations.restoreCheckedPaths(a.cfg.Recent.Paths)
+}
+
 func (a *App) stopSearch() {
 	if a.cancelSearch != nil {
 		a.cancelSearch()
@@ -96,12 +107,12 @@ func (a *App) runUnifiedSearch(ctx context.Context, base search.Options, locOpts
 
 	roots, err := a.netEng.ResolveRoots(ctx, locOpts, logf)
 	if err != nil && ctx.Err() != nil {
-		a.finishSearch(ctx.Err())
+		a.finishSearch(ctx.Err(), base.FilePattern, locOpts.LocalRoots)
 		return
 	}
 	if len(roots) == 0 {
 		a.setStatus("No search locations found")
-		a.finishSearch(nil)
+		a.finishSearch(nil, base.FilePattern, locOpts.LocalRoots)
 		return
 	}
 
@@ -127,7 +138,7 @@ func (a *App) runUnifiedSearch(ctx context.Context, base search.Options, locOpts
 		}
 	}
 
-	a.finishSearch(searchErr)
+	a.finishSearch(searchErr, base.FilePattern, locOpts.LocalRoots)
 }
 
 func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearch.ResolvedRoot, rootIndex, rootTotal int) error {
@@ -171,7 +182,11 @@ func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearc
 	return <-done
 }
 
-func (a *App) finishSearch(err error) {
+// finishSearch runs entirely on the UI goroutine (via runOnUI) so that
+// reading a.searchResults here -- to update the status bar and record the
+// Start tab's history -- never races with the same-thread appends made
+// while results were streaming in.
+func (a *App) finishSearch(err error, filePattern string, searchPaths []string) {
 	runOnUI(func() {
 		a.searchButton.Enable()
 		a.stopButton.Disable()
@@ -182,6 +197,12 @@ func (a *App) finishSearch(err error) {
 			return
 		}
 		a.statusBar.SetText(searchCompleteText(len(a.searchResults), err == context.Canceled))
+
+		recent := make([]recentResultSource, len(a.searchResults))
+		for i, r := range a.searchResults {
+			recent[i] = recentResultSource{Path: r.Path, DisplayPath: r.DisplayPath, Modified: formatModTime(r.ModTime), Size: r.Size}
+		}
+		a.start.recordSearch(filePattern, searchPaths, recent)
 	})
 }
 
