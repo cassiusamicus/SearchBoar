@@ -35,6 +35,7 @@ func Run() {
 		ssStore:  storedsearches.LoadStore(cfg),
 	}
 	a.fyneApp.SetIcon(assets.Icon())
+	a.fyneApp.Settings().SetTheme(nordTheme{})
 
 	a.win = a.fyneApp.NewWindow("SearchBoar")
 	a.win.SetIcon(assets.Icon())

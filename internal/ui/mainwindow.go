@@ -5,6 +5,8 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+
+	"codeberg.org/cassiusamicus/Utilities/assets"
 )
 
 // brand colors carried forward from the original GTK3 app's wordmark and
@@ -20,17 +22,31 @@ func (c *fyneColor) RGBA() (r, g, b, a uint32) {
 	return uint32(c.r) * 0x101, uint32(c.g) * 0x101, uint32(c.b) * 0x101, uint32(c.a) * 0x101
 }
 
+// wordmark is the logo image plus "Search"/"Boar" text, rendered as a
+// single toolbar item so it sits on the same row as the other toolbar
+// icons rather than as a separate banner row.
 func wordmark() fyne.CanvasObject {
+	icon := canvas.NewImageFromResource(assets.Icon())
+	icon.FillMode = canvas.ImageFillContain
+	icon.SetMinSize(fyne.NewSize(28, 28))
+
 	search := canvas.NewText("Search", brandBlue)
 	search.TextStyle = fyne.TextStyle{Bold: true}
-	search.TextSize = 22
+	search.TextSize = 20
 
 	boar := canvas.NewText("Boar", brandOrange)
 	boar.TextStyle = fyne.TextStyle{Bold: true}
-	boar.TextSize = 22
+	boar.TextSize = 20
 
-	return container.NewHBox(search, boar)
+	return container.NewHBox(icon, search, boar)
 }
+
+// toolbarWidgetItem adapts an arbitrary CanvasObject (the wordmark) into a
+// widget.ToolbarItem, since Toolbar only ships action/separator/spacer
+// item types.
+type toolbarWidgetItem struct{ obj fyne.CanvasObject }
+
+func (t toolbarWidgetItem) ToolbarObject() fyne.CanvasObject { return t.obj }
 
 func (a *App) buildMainWindow() {
 	a.basic = newBasicTab(a)
@@ -56,7 +72,7 @@ func (a *App) buildMainWindow() {
 	toolbar := a.buildToolbar()
 
 	content := container.NewBorder(
-		container.NewVBox(toolbar, wordmark()),
+		toolbar,
 		container.NewVBox(a.progressBar, a.statusBar),
 		nil, nil,
 		a.tabs,

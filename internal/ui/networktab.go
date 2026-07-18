@@ -121,7 +121,10 @@ func (t *networkTab) buildPatternBuilder() fyne.CanvasObject {
 		}
 	})
 	radio.SetSelected("All")
-	radio.Horizontal = true
+	// Vertical (not Horizontal) so this card doesn't demand an oversized
+	// natural width -- RadioGroup's horizontal MinSize is width-per-item
+	// times item count, which the enclosing 3-column grid then multiplies
+	// by 3, making the whole window unable to shrink below ~1900px.
 
 	t.containsEntry.OnChanged = func(string) {
 		sel := radio.Selected

@@ -14,6 +14,7 @@ const (
 	tabIndexDetails
 	tabIndexOverview
 	tabIndexFavorites
+	tabIndexNetwork
 )
 
 func (a *App) buildToolbar() *widget.Toolbar {
@@ -22,6 +23,8 @@ func (a *App) buildToolbar() *widget.Toolbar {
 	a.stopButton.Disable()
 
 	t := widget.NewToolbar(
+		toolbarWidgetItem{obj: wordmark()},
+		widget.NewToolbarSeparator(),
 		widget.NewToolbarAction(theme.HomeIcon(), func() { a.tabs.SelectIndex(tabIndexBasic) }),
 		a.searchButton,
 		widget.NewToolbarAction(theme.DocumentIcon(), func() { a.showStoredSearchesDialog() }),
