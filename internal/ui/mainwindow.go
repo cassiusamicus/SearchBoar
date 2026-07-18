@@ -76,7 +76,7 @@ func (a *App) buildMainWindow() {
 		startItem,
 		container.NewTabItemWithIcon("Search Builder", theme.SearchIcon(), builderContent),
 		container.NewTabItemWithIcon("Search Locations", theme.StorageIcon(), locationsContent),
-		container.NewTabItemWithIcon("Results", theme.ListIcon(), resultsContent),
+		container.NewTabItemWithIcon("Detailed Results", theme.ListIcon(), resultsContent),
 		container.NewTabItemWithIcon("Favorite Results", theme.DocumentIcon(), favContent),
 		container.NewTabItemWithIcon("Favorite Searches", theme.HistoryIcon(), favSearchesContent),
 		commonTermsItem,

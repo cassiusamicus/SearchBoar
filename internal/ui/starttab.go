@@ -77,16 +77,21 @@ func (t *startTab) build() fyne.CanvasObject {
 		func() fyne.CanvasObject { return newTappableBox(widget.NewIcon(theme.FileIcon()), widget.NewLabel("")) },
 		func(id widget.ListItemID, o fyne.CanvasObject) { t.updateResultRow(id, o.(*tappableBox)) },
 	)
-	viewAllBtn := widget.NewButton("View All Results  →", func() { t.app.tabs.SelectIndex(tabIndexResults) })
+	viewAllBtn := widget.NewButton("Open Detailed Results  →", func() { t.app.tabs.SelectIndex(tabIndexResults) })
 	clearBtn := widget.NewButton("Clear History", func() { t.clear() })
-	resultsCard := widget.NewCard("Recent Results", "", container.NewBorder(
+	resultsCard := widget.NewCard("Quick Results", "Your most recent search hits", container.NewBorder(
 		nil, container.NewHBox(viewAllBtn, clearBtn), nil, nil,
 		container.NewVScroll(t.resultsList),
 	))
 
 	t.refresh()
 
-	return container.NewVBox(quickSearchCard, quickLocationCard, resultsCard)
+	// Two columns instead of one long stacked column: quick search/location
+	// controls on the left, Quick Results filling the right -- a single
+	// VBox left the whole right half of the window empty on anything wider
+	// than a narrow laptop screen.
+	left := container.NewVBox(quickSearchCard, quickLocationCard)
+	return container.NewGridWithColumns(2, left, resultsCard)
 }
 
 func (t *startTab) updateResultRow(id widget.ListItemID, box *tappableBox) {

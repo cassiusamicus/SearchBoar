@@ -38,11 +38,13 @@ Local and network search share one regex-based engine and one set of
 result tabs — there's no separate "network search mode" with its own
 glob patterns, the way the original two apps worked.
 
-- **Start tab**: a quick-access dashboard, not a full picker — abbreviated
-  Files/Containing fields and a "Search Now" button, a one-line summary of
-  the current search locations with a "Browse for a folder..." shortcut,
-  and your most recent results, all persisted across restarts with a
-  Clear History button. "Open Search Builder"/"Open Search Locations"
+- **Start tab**: a quick-access dashboard, not a full picker, laid out in
+  two columns instead of one long stacked one. Left: abbreviated Files/
+  Containing fields and a "Search Now" button, a one-line summary of the
+  current search locations with a workspace quick-select and a "Browse
+  for a folder..." shortcut. Right: Quick Results, your most recent
+  search hits, persisted across restarts with a Clear History button.
+  "Open Search Builder"/"Open Search Locations"/"Open Detailed Results"
   links jump to the full versions for anything more elaborate.
 - **Search Builder tab**: filename and content regex search (with a
   ripgrep fast path when installed, falling back to a worker-pool walk
@@ -68,8 +70,8 @@ glob patterns, the way the original two apps worked.
   the Search Locations tab's Workspaces card. A matching quick-select
   dropdown on the Start tab applies a saved workspace in one click without
   a trip to the full tab.
-- **Results tab**: a file list on the left (sortable by Number of Hits/
-  Name/Location/Modified/Size — Number of Hits, most first, is the
+- **Detailed Results tab**: a file list on the left (sortable by Number of
+  Hits/Name/Location/Modified/Size — Number of Hits, most first, is the
   default) and a preview of the selected file's matches on the right —
   highlighted, wrapped context lines, Prev/Next buttons to step through
   every result without returning to the list, and Open/Actions buttons
@@ -112,8 +114,11 @@ This cache has no effect on a search ripgrep handles directly (ripgrep
 reads files itself and is already fast for plain-text search) — its
 benefit shows up for PDF/DOCX-heavy searches, systems without ripgrep
 installed, and repeat searches over slow storage like a network share. The
-About dialog (the toolbar's `?` icon) shows the cache's current size and has
-a "Clear search cache" button.
+Settings dialog (the toolbar's gear icon) shows the cache's current size
+and has a "Clear search cache" button, alongside custom "open with"
+program associations. Every toolbar icon has a hover tooltip; a plain-text
+`config.ini` is still there and directly editable if you want it, but the
+Settings dialog is the normal way to change anything now.
 
 ## Network search and privileges
 

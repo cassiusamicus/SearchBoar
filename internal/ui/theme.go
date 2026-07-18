@@ -71,5 +71,13 @@ func (nordTheme) Font(style fyne.TextStyle) fyne.Resource {
 }
 
 func (nordTheme) Size(name fyne.ThemeSizeName) float32 {
+	if name == theme.SizeNameHeadingText {
+		// The default theme's card-title size (24) reads oversized against
+		// this app's 14pt body text -- every widget.Card in the app (Quick
+		// Search, Quick Location, Search In, Storage Locations, etc.) uses
+		// this size for its title, so shrinking it here fixes all of them
+		// at once rather than needing a per-card workaround.
+		return 16
+	}
 	return theme.DefaultTheme().Size(name)
 }

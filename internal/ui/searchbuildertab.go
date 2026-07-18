@@ -121,14 +121,22 @@ func (b *searchBuilderTab) build() fyne.CanvasObject {
 	searchBtn := widget.NewButtonWithIcon("Search", theme.SearchIcon(), func() { b.app.startSearch() })
 	searchBtn.Importance = widget.HighImportance
 
+	// Options/Context Lines/File Size Filter are each just a short row of
+	// controls; stacked full-width (the previous layout) left most of each
+	// card empty on anything wider than a narrow window. Side by side, they
+	// use the width the tab already has.
+	optionsRowCards := container.NewGridWithColumns(3,
+		widget.NewCard("Options", "", optionsRow),
+		contextCard,
+		sizeCard,
+	)
+
 	return container.NewVBox(
 		widget.NewLabel("File Types:"), typeRow,
 		filesRow,
 		containingRow,
 		searchBtn,
-		widget.NewCard("Options", "", optionsRow),
-		contextCard,
-		sizeCard,
+		optionsRowCards,
 		excludeCard,
 		help,
 	)

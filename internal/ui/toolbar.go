@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"fmt"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
@@ -23,28 +21,29 @@ const (
 )
 
 func (a *App) buildToolbar() *widget.Toolbar {
-	a.searchButton = widget.NewToolbarAction(theme.SearchIcon(), func() { a.startSearch() })
-	a.stopButton = widget.NewToolbarAction(theme.MediaStopIcon(), func() { a.stopSearch() })
+	a.searchButton = newIconTipButton(theme.SearchIcon(), "Start a search", a.win, func() { a.startSearch() })
+	a.stopButton = newIconTipButton(theme.MediaStopIcon(), "Stop the current search", a.win, func() { a.stopSearch() })
 	a.stopButton.Disable()
 
+	// A stretchable spacer keeps the wordmark and the icon group apart
+	// instead of crowding them together, and every icon gets a hover
+	// tooltip (see icontip.go -- Fyne has no built-in tooltip widget) since
+	// several of these (Favorite Searches vs. Favorites, Stop) aren't
+	// self-explanatory from the icon alone.
 	t := widget.NewToolbar(
 		toolbarWidgetItem{obj: wordmark()},
-		widget.NewToolbarAction(theme.HomeIcon(), func() { a.tabs.SelectIndex(tabIndexStart) }),
-		a.searchButton,
-		widget.NewToolbarAction(theme.DocumentIcon(), func() { a.tabs.SelectIndex(tabIndexFavSearches) }),
-		widget.NewToolbarAction(theme.ListIcon(), func() { a.tabs.SelectIndex(tabIndexFavorites) }),
-		a.stopButton,
-		widget.NewToolbarAction(theme.SettingsIcon(), func() { a.openConfigFile() }),
-		widget.NewToolbarAction(theme.HelpIcon(), func() { a.showAboutDialog() }),
+		widget.NewToolbarSpacer(),
+		toolbarWidgetItem{obj: newIconTipButton(theme.HomeIcon(), "Start tab", a.win, func() { a.tabs.SelectIndex(tabIndexStart) })},
+		toolbarWidgetItem{obj: a.searchButton},
+		toolbarWidgetItem{obj: a.stopButton},
+		toolbarWidgetItem{obj: newIconTipButton(theme.DocumentIcon(), "Favorite Searches", a.win, func() { a.tabs.SelectIndex(tabIndexFavSearches) })},
+		toolbarWidgetItem{obj: newIconTipButton(theme.ListIcon(), "Favorite Results", a.win, func() { a.tabs.SelectIndex(tabIndexFavorites) })},
+		toolbarWidgetItem{obj: newIconTipButton(theme.SettingsIcon(), "Settings", a.win, func() { a.showSettingsDialog() })},
+		toolbarWidgetItem{obj: newIconTipButton(theme.HelpIcon(), "About SearchBoar", a.win, func() { a.showAboutDialog() })},
 	)
 	return t
 }
 
-// showAboutDialog also surfaces the search-result text cache's current size
-// and a way to clear it -- the cache has no automatic size cap (see
-// internal/cache's package doc: it only ever grows from files the user has
-// actually searched, never a background index), so this is the one place a
-// user can see it exist and reclaim the disk space.
 func (a *App) showAboutDialog() {
 	aboutLabel := widget.NewLabel(
 		"SearchBoar v. " + version.Version + "\n\n" +
@@ -52,30 +51,7 @@ func (a *App) showAboutDialog() {
 	)
 	aboutLabel.Wrapping = fyne.TextWrapWord
 
-	cacheLabel := widget.NewLabel(a.cacheStatsText())
-	clearBtn := widget.NewButton("Clear search cache", func() {
-		a.cache.Clear()
-		cacheLabel.SetText(a.cacheStatsText())
-	})
-
-	content := container.NewVBox(
-		aboutLabel,
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Search Result Cache", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel("Text extracted from files you've searched is cached so repeat searches over the same files skip re-reading/re-extracting them. Nothing is cached until you search for it."),
-		cacheLabel,
-		clearBtn,
-	)
-
-	d := dialog.NewCustom("About SearchBoar", "OK", content, a.win)
-	d.Resize(fyne.NewSize(440, 360))
+	d := dialog.NewCustom("About SearchBoar", "OK", container.NewVBox(aboutLabel), a.win)
+	d.Resize(fyne.NewSize(400, 200))
 	d.Show()
-}
-
-func (a *App) cacheStatsText() string {
-	rows, bytes, err := a.cache.Stats()
-	if err != nil {
-		return "Cache: unavailable"
-	}
-	return fmt.Sprintf("Cache: %d file(s), %s", rows, formatSize(bytes))
 }

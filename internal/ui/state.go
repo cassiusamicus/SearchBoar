@@ -35,14 +35,14 @@ type App struct {
 	favStore  *favorites.Store
 	ssStore   *storedsearches.Store
 	wsStore   *workspaces.Store
-	cache     *cache.Cache // also referenced (nil-safe) via searchEng.Cache; kept here too for the About dialog's cache stats/clear button
+	cache     *cache.Cache // also referenced (nil-safe) via searchEng.Cache; kept here too for the Settings dialog's cache stats/clear button
 
 	tabs        *container.AppTabs
 	statusBar   *widget.Label
 	progressBar *widget.ProgressBar
 
-	searchButton *widget.ToolbarAction
-	stopButton   *widget.ToolbarAction
+	searchButton *iconTipButton
+	stopButton   *iconTipButton
 
 	cancelSearch context.CancelFunc
 
