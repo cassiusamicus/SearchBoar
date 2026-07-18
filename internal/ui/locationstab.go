@@ -80,7 +80,7 @@ func (t *locationsTab) build() fyne.CanvasObject {
 		widget.NewCard("Search In", "", container.NewVBox(t.localCheck, t.smbCheck, t.nfsCheck)),
 		widget.NewCard("Network Settings", "", container.NewVBox(
 			container.NewBorder(nil, nil, widget.NewLabel("Range:"), nil, t.cidrEntry),
-			widget.NewLabel("SMB credentials (kept for this session only):"),
+			widget.NewLabel("SMB credentials (this session only):"),
 			container.NewBorder(nil, nil, widget.NewLabel("User:"), nil, t.userEntry),
 			container.NewBorder(nil, nil, widget.NewLabel("Pass:"), nil, t.passEntry),
 		)),
@@ -94,7 +94,13 @@ func (t *locationsTab) build() fyne.CanvasObject {
 	main := container.NewHSplit(tree, sharesCol)
 	main.Offset = 0.5
 
-	return container.NewBorder(nil, nil, nil, sidebar, main)
+	// HSplit's minimum width is the sum of both children's natural widths,
+	// which would otherwise pin the whole window's minimum size (as
+	// happened before with the Pattern Builder's horizontal radio group).
+	// Wrapping it in a horizontal scroll lets the window shrink freely;
+	// the two columns scroll together if the window is narrower than they
+	// need.
+	return container.NewBorder(nil, nil, nil, sidebar, container.NewHScroll(main))
 }
 
 func (t *locationsTab) buildSharesColumn() fyne.CanvasObject {

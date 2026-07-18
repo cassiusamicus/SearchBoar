@@ -7,90 +7,64 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
 )
 
-// resultsTab is the unified "Results" tab: every match (local and
-// network) in one sortable, icon-led list -- Name / Location / Modified /
-// Size, styled after epicorg's FilePicker -- plus a content-match preview
-// pane and the usual open/context-menu actions.
+// resultsTab is the unified "Results" tab: a single scrolling column of
+// self-contained cards (name, location/date/size, and a wrapped preview of
+// the first match with highlighting), one per matched file -- modeled
+// after epicorg's search results list rather than a file-table-plus-
+// separate-preview-pane split. A table+narrow-preview-column split was
+// tried first and abandoned: the preview column was too narrow to be
+// useful, and widget.TextGrid (used for the preview) cannot wrap text at
+// all, only truncate.
 type resultsTab struct {
 	app *App
 
-	sortCol int // 0=name, 1=location, 2=modified, 3=size
-	sortAsc bool
-	order   []int
-	selRow  int
+	sortField string // "Name", "Location", "Modified", "Size"
+	sortAsc   bool
+	order     []int // display index -> app.searchResults index
 
-	table  *widget.Table
-	viewer *widget.TextGrid
+	cardsBox   *fyne.Container
+	countLabel *widget.Label
 }
 
 func newResultsTab(a *App) *resultsTab {
-	return &resultsTab{app: a, sortAsc: true, selRow: -1}
+	return &resultsTab{app: a, sortField: "Name", sortAsc: true}
 }
 
 func (t *resultsTab) build() fyne.CanvasObject {
-	t.table = widget.NewTable(
-		func() (int, int) { return len(t.order), 4 },
-		func() fyne.CanvasObject { return newTappableBox() },
-		func(id widget.TableCellID, o fyne.CanvasObject) { t.updateCell(id, o.(*tappableBox)) },
-	)
-	t.table.ShowHeaderRow = true
-	t.table.CreateHeader = func() fyne.CanvasObject { return widget.NewButton("", nil) }
-	t.table.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		b := o.(*widget.Button)
-		headers := []string{"Name", "Location", "Modified", "Size"}
-		b.SetText(headers[id.Col])
-		col := id.Col
-		b.OnTapped = func() { t.sortBy(col) }
-	}
-	t.table.SetColumnWidth(0, 220)
-	t.table.SetColumnWidth(1, 260)
-	t.table.SetColumnWidth(2, 150)
-	t.table.SetColumnWidth(3, 90)
+	// t.cardsBox/t.countLabel must exist before sortSelect.SetSelected
+	// below, since Select.SetSelected fires its OnChanged synchronously
+	// when the value actually changes, which calls resort() ->
+	// rebuildCards() -> both of these.
+	t.countLabel = widget.NewLabel("")
+	t.cardsBox = container.NewVBox()
 
-	t.viewer = widget.NewTextGrid()
+	sortSelect := widget.NewSelect([]string{"Name", "Location", "Modified", "Size"}, func(v string) {
+		t.sortField = v
+		t.resort()
+	})
+	sortSelect.SetSelected(t.sortField)
 
-	split := container.NewHSplit(
-		container.NewBorder(widget.NewLabel("Files Found"), nil, nil, nil, t.table),
-		container.NewBorder(widget.NewLabel("Content Matches"), nil, nil, nil, container.NewVScroll(t.viewer)),
-	)
-	split.Offset = 0.45
-	return split
-}
-
-func (t *resultsTab) updateCell(id widget.TableCellID, box *tappableBox) {
-	if id.Row >= len(t.order) {
-		box.SetObjects(nil)
-		return
-	}
-	res := t.app.searchResults[t.order[id.Row]]
-
-	switch id.Col {
-	case 0:
-		icon := widget.NewIcon(theme.FileIcon())
-		box.SetObjects([]fyne.CanvasObject{icon, widget.NewLabel(res.Name)})
-	case 1:
-		box.SetObjects([]fyne.CanvasObject{widget.NewLabel(filepath.Dir(displayPath(res)))})
-	case 2:
-		box.SetObjects([]fyne.CanvasObject{widget.NewLabel(formatModTime(res.ModTime))})
-	case 3:
-		box.SetObjects([]fyne.CanvasObject{widget.NewLabel(formatSize(res.Size))})
+	dirBtn := widget.NewButton("↑ Ascending", nil)
+	dirBtn.OnTapped = func() {
+		t.sortAsc = !t.sortAsc
+		if t.sortAsc {
+			dirBtn.SetText("↑ Ascending")
+		} else {
+			dirBtn.SetText("↓ Descending")
+		}
+		t.resort()
 	}
 
-	row := id.Row
-	box.OnTapped = func() { t.selectRow(row) }
-	box.OnDoubleTapped = func() { t.openRow(row) }
-	box.OnSecondaryTapped = func(e *fyne.PointEvent) {
-		t.selectRow(row)
-		rec := t.recordFor(row)
-		menu := t.app.fileContextMenu(rec, func() { t.table.Refresh() })
-		widget.ShowPopUpMenuAtPosition(menu, t.app.win.Canvas(), e.AbsolutePosition)
-	}
+	header := container.NewHBox(widget.NewLabel("Sort by:"), sortSelect, dirBtn, layout.NewSpacer(), t.countLabel)
+
+	return container.NewBorder(header, nil, nil, nil, container.NewVScroll(t.cardsBox))
 }
 
 // displayPath prefers a result's network-style DisplayPath (for files
@@ -102,88 +76,94 @@ func displayPath(res model.FileResult) string {
 	return res.Path
 }
 
-func (t *resultsTab) recordFor(row int) fileRecord {
-	res := t.app.searchResults[t.order[row]]
-	return fileRecord{
-		Path:        res.Path,
-		Name:        res.Name,
-		ModifiedStr: formatModTime(res.ModTime),
-		Size:        res.Size,
-		SizeHuman:   formatSize(res.Size),
+func (t *resultsTab) buildCard(idx int) fyne.CanvasObject {
+	res := t.app.searchResults[idx]
+
+	title := widget.NewRichTextWithText(res.Name)
+	title.Segments[0].(*widget.TextSegment).Style = widget.RichTextStyleStrong
+
+	meta := widget.NewLabel(fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModTime(res.ModTime), formatSize(res.Size)))
+
+	objects := []fyne.CanvasObject{title, meta}
+	if len(res.Matches) > 0 {
+		preview := widget.NewRichText(t.previewSegments(res)...)
+		preview.Wrapping = fyne.TextWrapWord
+		objects = append(objects, preview)
 	}
+	objects = append(objects, widget.NewSeparator())
+
+	box := newTappableBox(container.NewVBox(objects...))
+	box.OnDoubleTapped = func() {
+		if err := t.app.openResult(res.Path); err != nil {
+			t.app.setStatus("Failed to open: " + err.Error())
+		}
+	}
+	box.OnSecondaryTapped = func(e *fyne.PointEvent) {
+		rec := fileRecord{Path: res.Path, Name: res.Name, ModifiedStr: formatModTime(res.ModTime), Size: res.Size, SizeHuman: formatSize(res.Size)}
+		menu := t.app.fileContextMenu(rec, func() { t.resort() })
+		widget.ShowPopUpMenuAtPosition(menu, t.app.win.Canvas(), e.AbsolutePosition)
+	}
+	return box
 }
 
-func (t *resultsTab) selectRow(row int) {
-	t.selRow = row
-	t.showMatches(t.app.searchResults[t.order[row]])
-}
-
-func (t *resultsTab) openRow(row int) {
-	res := t.app.searchResults[t.order[row]]
-	if err := t.app.openResult(res.Path); err != nil {
-		t.app.setStatus("Failed to open: " + err.Error())
+// previewSegments renders the first match's context lines as one wrapped,
+// highlighted snippet (consecutive lines joined with a space rather than
+// kept as separate hard-wrapped rows, so the card reflows naturally at any
+// window width), with a "+N more match(es)" note if there were others.
+func (t *resultsTab) previewSegments(res model.FileResult) []widget.RichTextSegment {
+	if len(res.Matches) == 0 {
+		return nil
 	}
-}
+	m := res.Matches[0]
+	re := t.app.currentContentRegex()
 
-var (
-	matchStyle  = &widget.CustomTextGridStyle{FGColor: whiteColor, BGColor: brandBlue, TextStyle: fyne.TextStyle{Bold: true}}
-	lineNoStyle = &widget.CustomTextGridStyle{FGColor: brandBlue, TextStyle: fyne.TextStyle{Bold: true}}
-	whiteColor  = &fyneColor{r: 0xFF, g: 0xFF, b: 0xFF, a: 0xFF}
-)
-
-// showMatches renders each ContentMatch block separated by a dashed line,
-// each context line prefixed with a right-aligned line number, and
-// highlights every content-regex occurrence on the actual match line.
-func (t *resultsTab) showMatches(res model.FileResult) {
-	var b []byte
-	type styledRange struct {
-		row, start, end int
-		style           widget.TextGridStyle
+	segs := []widget.RichTextSegment{
+		&widget.TextSegment{Text: fmt.Sprintf("Line %d:  ", m.LineNum), Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder}},
 	}
-	var ranges []styledRange
 
-	row := 0
-	for i, m := range res.Matches {
+	for i, line := range m.ContextLines {
 		if i > 0 {
-			b = append(b, []byte("------------------------------------------------------------\n")...)
-			row++
+			segs = append(segs, &widget.TextSegment{Text: "  ", Style: widget.RichTextStyleInline})
 		}
-		for li, line := range m.ContextLines {
-			lineNum := m.ContextStartLine + li
-			prefix := fmt.Sprintf("%4d: ", lineNum)
-			b = append(b, prefix...)
-			ranges = append(ranges, styledRange{row: row, start: 0, end: len(prefix), style: lineNoStyle})
-			if lineNum == m.LineNum {
-				if re := t.app.currentContentRegex(); re != nil {
-					for _, loc := range re.FindAllStringIndex(line, -1) {
-						ranges = append(ranges, styledRange{row: row, start: len(prefix) + loc[0], end: len(prefix) + loc[1], style: matchStyle})
-					}
-				}
+		if re == nil {
+			segs = append(segs, &widget.TextSegment{Text: line, Style: widget.RichTextStyleInline})
+			continue
+		}
+		last := 0
+		for _, loc := range re.FindAllStringIndex(line, -1) {
+			if loc[0] > last {
+				segs = append(segs, &widget.TextSegment{Text: line[last:loc[0]], Style: widget.RichTextStyleInline})
 			}
-			b = append(b, line...)
-			b = append(b, '\n')
-			row++
+			segs = append(segs, &widget.TextSegment{
+				Text:  line[loc[0]:loc[1]],
+				Style: widget.RichTextStyle{Inline: true, TextStyle: fyne.TextStyle{Bold: true}, ColorName: theme.ColorNamePrimary},
+			})
+			last = loc[1]
+		}
+		if last < len(line) {
+			segs = append(segs, &widget.TextSegment{Text: line[last:], Style: widget.RichTextStyleInline})
 		}
 	}
 
-	t.viewer.SetText(string(b))
-	for _, r := range ranges {
-		t.viewer.SetStyleRange(r.row, r.start, r.row, r.end, r.style)
+	if len(res.Matches) > 1 {
+		segs = append(segs, &widget.TextSegment{
+			Text:  fmt.Sprintf("   (+%d more match%s)", len(res.Matches)-1, pluralS(len(res.Matches)-1)),
+			Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder},
+		})
 	}
+	return segs
 }
 
-func (t *resultsTab) sortBy(col int) {
-	if t.sortCol == col {
-		t.sortAsc = !t.sortAsc
-	} else {
-		t.sortCol = col
-		t.sortAsc = true
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
 	}
-	t.resort()
+	return "es"
 }
 
-// resort rebuilds the display order from t.app.searchResults, called both
-// when the sort column/direction changes and whenever new results arrive.
+// resort rebuilds the display order and every card from t.app.searchResults,
+// called both when the sort field/direction changes and whenever a new
+// result arrives.
 func (t *resultsTab) resort() {
 	order := make([]int, len(t.app.searchResults))
 	for i := range order {
@@ -193,12 +173,12 @@ func (t *resultsTab) resort() {
 	less := func(i, j int) bool {
 		a, b := results[order[i]], results[order[j]]
 		var lt bool
-		switch t.sortCol {
-		case 1:
+		switch t.sortField {
+		case "Location":
 			lt = filepath.Dir(displayPath(a)) < filepath.Dir(displayPath(b))
-		case 2:
+		case "Modified":
 			lt = a.ModTime.Before(b.ModTime)
-		case 3:
+		case "Size":
 			lt = a.Size < b.Size
 		default:
 			lt = a.Name < b.Name
@@ -210,7 +190,17 @@ func (t *resultsTab) resort() {
 	}
 	sort.SliceStable(order, less)
 	t.order = order
-	t.table.Refresh()
+	t.rebuildCards()
+}
+
+func (t *resultsTab) rebuildCards() {
+	objects := make([]fyne.CanvasObject, 0, len(t.order))
+	for _, idx := range t.order {
+		objects = append(objects, t.buildCard(idx))
+	}
+	t.cardsBox.Objects = objects
+	t.cardsBox.Refresh()
+	t.countLabel.SetText(fmt.Sprintf("%d result(s)", len(t.order)))
 }
 
 func (t *resultsTab) addResult(model.FileResult) {
@@ -219,7 +209,11 @@ func (t *resultsTab) addResult(model.FileResult) {
 
 func (t *resultsTab) clear() {
 	t.order = nil
-	t.selRow = -1
-	t.viewer.SetText("")
-	t.table.Refresh()
+	if t.cardsBox != nil {
+		t.cardsBox.Objects = nil
+		t.cardsBox.Refresh()
+	}
+	if t.countLabel != nil {
+		t.countLabel.SetText("")
+	}
 }
