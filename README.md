@@ -60,15 +60,22 @@ glob patterns, the way the original two apps worked.
   batch (one `pkexec`/`sudo` prompt per search, not one per share), and
   the SMB username/password fields are reused for every mount for the
   rest of the session (never written to disk). A sidebar has the
-  Local/SMB/NFS master toggles, the network range, and a prominent
-  Search button.
-- **Results tab**: a file list on the left (sortable by Name/Location/
-  Modified/Size) and a preview of the selected file's matches on the
-  right — highlighted, wrapped context lines, Prev/Next buttons to step
-  through every result without returning to the list, and Open/Actions
-  buttons for the usual open/open-with/show-in-file-manager/copy-path/
-  favorite/delete actions. A Stop button on the tab itself cancels a
-  search mid-run.
+  Local/SMB/NFS master toggles, a Workspaces card (see below), the
+  network range, and a prominent Search button.
+- **Workspaces**: save the current Search Locations selection (checked
+  drives/folders, excluded subfolders, Local/SMB/NFS scope, and any
+  checked SMB/NFS shares) under a name, then Load or Delete it later from
+  the Search Locations tab's Workspaces card. A matching quick-select
+  dropdown on the Start tab applies a saved workspace in one click without
+  a trip to the full tab.
+- **Results tab**: a file list on the left (sortable by Number of Hits/
+  Name/Location/Modified/Size — Number of Hits, most first, is the
+  default) and a preview of the selected file's matches on the right —
+  highlighted, wrapped context lines, Prev/Next buttons to step through
+  every result without returning to the list, and Open/Actions buttons
+  for the usual open/open-with/show-in-file-manager/copy-path/favorite/
+  delete actions. A Stop button on the tab itself cancels a search
+  mid-run.
 - **Favorite Results tab**: categorized favorites with add/rename/move/
   delete categories and reordering.
 - **Favorite Searches tab**: save/load/delete named filename/content

@@ -17,6 +17,7 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
 	"codeberg.org/cassiusamicus/Utilities/internal/search"
 	"codeberg.org/cassiusamicus/Utilities/internal/storedsearches"
+	"codeberg.org/cassiusamicus/Utilities/internal/workspaces"
 )
 
 // Run builds and shows the main SearchBoar window, then blocks until the
@@ -45,6 +46,7 @@ func Run() {
 		netEng:    netsearch.NewEngine(),
 		favStore:  favorites.LoadStore(cfg),
 		ssStore:   storedsearches.LoadStore(cfg),
+		wsStore:   workspaces.LoadStore(cfg),
 		cache:     resultCache,
 	}
 	a.fyneApp.SetIcon(assets.Icon())

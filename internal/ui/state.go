@@ -14,6 +14,7 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
 	"codeberg.org/cassiusamicus/Utilities/internal/search"
 	"codeberg.org/cassiusamicus/Utilities/internal/storedsearches"
+	"codeberg.org/cassiusamicus/Utilities/internal/workspaces"
 )
 
 // App is the shared hub every tab/dialog closes over: config, engines,
@@ -33,6 +34,7 @@ type App struct {
 	netEng    *netsearch.Engine
 	favStore  *favorites.Store
 	ssStore   *storedsearches.Store
+	wsStore   *workspaces.Store
 	cache     *cache.Cache // also referenced (nil-safe) via searchEng.Cache; kept here too for the About dialog's cache stats/clear button
 
 	tabs        *container.AppTabs

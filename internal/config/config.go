@@ -31,6 +31,7 @@ type Config struct {
 	FavoriteSearches      map[string]StoredSearch
 	CustomPrograms        map[string]string
 	RecentResults         []RecentResult
+	Workspaces            map[string]LocationWorkspace
 }
 
 type RecentConfig struct {
@@ -76,6 +77,22 @@ type StoredSearch struct {
 	Directory      string
 }
 
+// LocationWorkspace is a named, saved set of Search Locations selections --
+// which local roots/excluded subfolders are checked, whether local/SMB/NFS
+// are in scope, and which specific SMB shares/NFS exports (if any) were
+// selected -- so a user can jump straight back to "my usual places to
+// search" instead of rebuilding the selection by hand every time.
+type LocationWorkspace struct {
+	Name        string
+	SearchLocal bool
+	SearchSMB   bool
+	SearchNFS   bool
+	LocalRoots  []string
+	ExcludeDirs []string
+	SMBShares   []string // "host:share"
+	NFSExports  []string // "host:export"
+}
+
 // DefaultPath returns ~/.config/searchboar/config.ini, matching the
 // original app's Path.home() / '.config' / 'searchboar' / 'config.ini'.
 func DefaultPath() string {
@@ -96,6 +113,7 @@ func New(path string) *Config {
 		FavoriteSearches:      map[string]StoredSearch{},
 		CustomPrograms:        map[string]string{},
 		FavoriteCategoryOrder: []string{"Uncategorized"},
+		Workspaces:            map[string]LocationWorkspace{},
 	}
 }
 
@@ -124,6 +142,7 @@ func Load(path string) (*Config, error) {
 	cfg.loadFavoriteSearches(doc)
 	cfg.loadCustomPrograms(doc)
 	cfg.loadRecentResults(doc)
+	cfg.loadWorkspaces(doc)
 	return cfg, nil
 }
 
@@ -142,6 +161,7 @@ func (c *Config) Save() error {
 	c.saveFavoriteSearches(doc)
 	c.saveCustomPrograms(doc)
 	c.saveRecentResults(doc)
+	c.saveWorkspaces(doc)
 
 	tmp, err := os.CreateTemp(filepath.Dir(c.path), ".config-*.ini.tmp")
 	if err != nil {

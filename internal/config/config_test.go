@@ -171,3 +171,53 @@ func TestRecentResultsAndLastFilePatternRoundTrip(t *testing.T) {
 		t.Errorf("RecentResults = %+v, want %+v", reloaded.RecentResults, cfg.RecentResults)
 	}
 }
+
+func TestWorkspacesRoundTrip(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	cfg.Workspaces["Work"] = LocationWorkspace{
+		Name:        "Work",
+		SearchLocal: true,
+		SearchSMB:   true,
+		SearchNFS:   false,
+		LocalRoots:  []string{"/home/user/Work", "/home/user/Projects"},
+		ExcludeDirs: []string{"/home/user/Work/tmp"},
+		SMBShares:   []string{"fileserver:projects", "fileserver:archive"},
+		NFSExports:  nil,
+	}
+	cfg.Workspaces["Personal"] = LocationWorkspace{
+		Name:        "Personal",
+		SearchLocal: true,
+		LocalRoots:  []string{"/home/user/Personal"},
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(reloaded.Workspaces, cfg.Workspaces) {
+		t.Errorf("Workspaces = %+v, want %+v", reloaded.Workspaces, cfg.Workspaces)
+	}
+}
+
+func TestWorkspacesEmptyListsRoundTripAsNil(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	cfg.Workspaces["Bare"] = LocationWorkspace{Name: "Bare", SearchLocal: true}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, ok := reloaded.Workspaces["Bare"]
+	if !ok {
+		t.Fatal("expected \"Bare\" workspace to load")
+	}
+	if w.LocalRoots != nil || w.ExcludeDirs != nil || w.SMBShares != nil || w.NFSExports != nil {
+		t.Errorf("expected all list fields nil for an empty workspace, got %+v", w)
+	}
+}

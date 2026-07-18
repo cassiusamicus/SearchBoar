@@ -23,10 +23,11 @@ import (
 type startTab struct {
 	app *App
 
-	quickFileEntry *widget.Entry
-	quickContent   *widget.Entry
-	locationLabel  *widget.Label
-	resultsList    *widget.List
+	quickFileEntry  *widget.Entry
+	quickContent    *widget.Entry
+	locationLabel   *widget.Label
+	workspaceSelect *widget.Select
+	resultsList     *widget.List
 }
 
 func newStartTab(a *App) *startTab {
@@ -63,9 +64,12 @@ func (t *startTab) build() fyne.CanvasObject {
 	openLocationsBtn := widget.NewButton("Open Search Locations  →", func() {
 		t.app.tabs.SelectIndex(tabIndexLocations)
 	})
+	t.workspaceSelect = widget.NewSelect(nil, func(name string) { t.selectWorkspace(name) })
+	t.workspaceSelect.PlaceHolder = "Workspace..."
+	t.refreshWorkspaces()
 	quickLocationCard := widget.NewCard("Quick Location", "", container.NewVBox(
 		t.locationLabel,
-		container.NewHBox(localOnlyBtn, browseBtn, openLocationsBtn),
+		container.NewHBox(localOnlyBtn, t.workspaceSelect, browseBtn, openLocationsBtn),
 	))
 
 	t.resultsList = widget.NewList(
@@ -145,6 +149,28 @@ func (t *startTab) localOnly() {
 	t.app.locations.smbCheck.SetChecked(false)
 	t.app.locations.nfsCheck.SetChecked(false)
 	t.locationLabel.SetText(t.locationSummary())
+}
+
+// selectWorkspace applies a saved workspace (built/managed on the Search
+// Locations tab) directly from the Start tab, so switching between a few
+// regular search areas doesn't require a trip to the full tab.
+func (t *startTab) selectWorkspace(name string) {
+	w, ok := t.app.wsStore.Get(name)
+	if !ok {
+		return
+	}
+	t.app.locations.applyWorkspace(w)
+	t.locationLabel.SetText(t.locationSummary())
+}
+
+// refreshWorkspaces reloads the quick-select's options from the store --
+// called on build and whenever a workspace is saved/deleted from the
+// Search Locations tab, so both stay in sync.
+func (t *startTab) refreshWorkspaces() {
+	if t.workspaceSelect == nil {
+		return
+	}
+	t.workspaceSelect.SetOptions(workspaceNames(t.app.wsStore.List()))
 }
 
 func (t *startTab) quickBrowse() {

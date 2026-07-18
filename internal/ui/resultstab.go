@@ -27,7 +27,7 @@ import (
 type resultsTab struct {
 	app *App
 
-	sortField string // "Name", "Location", "Modified", "Size"
+	sortField string // "Name", "Location", "Modified", "Size", "Number of hits"
 	sortAsc   bool
 	order     []int // display index -> app.searchResults index
 	selIdx    int   // display index currently shown in the preview, -1 if none
@@ -46,7 +46,10 @@ type resultsTab struct {
 }
 
 func newResultsTab(a *App) *resultsTab {
-	return &resultsTab{app: a, sortField: "Name", sortAsc: true, selIdx: -1}
+	// Descending by default: sorting by hit count is most useful with the
+	// most-matched files first, unlike the other fields (name/location/
+	// date), where ascending is the more natural default.
+	return &resultsTab{app: a, sortField: "Number of hits", sortAsc: false, selIdx: -1}
 }
 
 func (t *resultsTab) build() fyne.CanvasObject {
@@ -95,13 +98,19 @@ func (t *resultsTab) build() fyne.CanvasObject {
 	t.openBtn.Disable()
 	t.actionsBtn.Disable()
 
-	sortSelect := widget.NewSelect([]string{"Name", "Location", "Modified", "Size"}, func(v string) {
+	sortSelect := widget.NewSelect([]string{"Number of hits", "Name", "Location", "Modified", "Size"}, func(v string) {
 		t.sortField = v
 		t.resort()
 	})
 	sortSelect.SetSelected(t.sortField)
 
-	dirBtn := widget.NewButton("↑ Ascending", nil)
+	dirBtnText := func() string {
+		if t.sortAsc {
+			return "↑ Ascending"
+		}
+		return "↓ Descending"
+	}
+	dirBtn := widget.NewButton(dirBtnText(), nil)
 	dirBtn.OnTapped = func() {
 		t.sortAsc = !t.sortAsc
 		if t.sortAsc {
@@ -292,6 +301,8 @@ func (t *resultsTab) resort() {
 			lt = a.ModTime.Before(b.ModTime)
 		case "Size":
 			lt = a.Size < b.Size
+		case "Number of hits":
+			lt = len(a.Matches) < len(b.Matches)
 		default:
 			lt = a.Name < b.Name
 		}

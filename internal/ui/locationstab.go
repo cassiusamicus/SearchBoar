@@ -52,6 +52,8 @@ type locationsTab struct {
 	selectedShareKeys map[string]bool
 	shareList         *widget.List
 	shareStatus       *widget.Label
+
+	workspaceSelect *widget.Select
 }
 
 func newLocationsTab(a *App) *locationsTab {
@@ -78,6 +80,7 @@ func (t *locationsTab) build() fyne.CanvasObject {
 
 	sidebar := container.NewVBox(
 		widget.NewCard("Search In", "", container.NewVBox(t.localCheck, t.smbCheck, t.nfsCheck)),
+		t.buildWorkspaceCard(),
 		widget.NewCard("Network Settings", "", container.NewVBox(
 			container.NewBorder(nil, nil, widget.NewLabel("Range:"), nil, t.cidrEntry),
 			widget.NewLabel("SMB credentials (this session only):"),
