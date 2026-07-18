@@ -86,6 +86,13 @@ func (e *Engine) Run(ctx context.Context, opts Options, results chan<- model.Fil
 	return e.runWalk(ctx, opts, filenameRe, contentRe, results, progress)
 }
 
+// CompileRegex is the exported form of the engine's own pattern compilation
+// (default-to-".*", optional case-insensitivity), so callers (e.g. the UI's
+// match-highlighting) can build the identical regex the engine used.
+func CompileRegex(pattern string, caseSensitive bool) (*regexp.Regexp, error) {
+	return compileRegex(pattern, caseSensitive)
+}
+
 func compileRegex(pattern string, caseSensitive bool) (*regexp.Regexp, error) {
 	if pattern == "" {
 		pattern = ".*"

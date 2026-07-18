@@ -9,19 +9,48 @@ import (
 	"fyne.io/fyne/v2/app"
 
 	"codeberg.org/cassiusamicus/Utilities/assets"
+	"codeberg.org/cassiusamicus/Utilities/internal/config"
+	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
+	"codeberg.org/cassiusamicus/Utilities/internal/search"
+	"codeberg.org/cassiusamicus/Utilities/internal/storedsearches"
 )
 
 // Run builds and shows the main SearchBoar window, then blocks until the
 // window is closed.
 func Run() {
-	a := app.NewWithID("com.epicureanfriends.searchboar")
-	a.SetIcon(assets.Icon())
+	cfg, err := config.Load(config.DefaultPath())
+	if err != nil {
+		// A corrupt config shouldn't prevent the app from starting; fall
+		// back to defaults rather than crashing on launch.
+		cfg = config.New(config.DefaultPath())
+	}
 
-	w := a.NewWindow("SearchBoar")
-	w.SetIcon(assets.Icon())
-	w.Resize(fyne.NewSize(900, 600))
+	a := &App{
+		fyneApp:  app.NewWithID("com.epicureanfriends.searchboar"),
+		cfg:      cfg,
+		engine:   search.NewEngine(),
+		favStore: favorites.LoadStore(cfg),
+		ssStore:  storedsearches.LoadStore(cfg),
+	}
+	a.fyneApp.SetIcon(assets.Icon())
 
-	w.SetContent(newMainWindow(a, w))
+	a.win = a.fyneApp.NewWindow("SearchBoar")
+	a.win.SetIcon(assets.Icon())
+	a.win.SetMaster()
 
-	w.ShowAndRun()
+	a.buildMainWindow()
+	a.restoreWindowGeometry()
+	go a.checkDependenciesOnStartup()
+
+	a.win.SetCloseIntercept(func() {
+		a.saveWindowGeometry()
+		a.cfg.Save()
+		a.win.Close()
+	})
+
+	a.win.ShowAndRun()
+}
+
+func defaultWindowSize() fyne.Size {
+	return fyne.NewSize(900, 600)
 }
