@@ -41,6 +41,7 @@ func (t *startTab) build() fyne.CanvasObject {
 	t.quickContent.OnSubmitted = func(string) { t.searchNow() }
 
 	searchNowBtn := widget.NewButtonWithIcon("Search Now", theme.SearchIcon(), func() { t.searchNow() })
+	searchNowBtn.Importance = widget.HighImportance
 	openBuilderBtn := widget.NewButton("Open Search Builder  →", func() {
 		t.commitQuickFields()
 		t.app.tabs.SelectIndex(tabIndexBuilder)

@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -117,10 +118,14 @@ func (b *searchBuilderTab) build() fyne.CanvasObject {
 
 	help := widget.NewAccordion(widget.NewAccordionItem("Search Help", searchHelpContent()))
 
+	searchBtn := widget.NewButtonWithIcon("Search", theme.SearchIcon(), func() { b.app.startSearch() })
+	searchBtn.Importance = widget.HighImportance
+
 	return container.NewVBox(
 		widget.NewLabel("File Types:"), typeRow,
 		filesRow,
 		containingRow,
+		searchBtn,
 		widget.NewCard("Options", "", optionsRow),
 		contextCard,
 		sizeCard,

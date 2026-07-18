@@ -17,9 +17,31 @@ type LocationOptions struct {
 	SearchSMB   bool
 	SearchNFS   bool
 
+	// SelectedSMBShares/SelectedNFSExports are the specific shares/exports
+	// to mount and search (from a prior Scan for Shares in the Search
+	// Locations tab). Unlike local drives, there is no "empty means
+	// everything" fallback here: mounting every share on every discovered
+	// LAN host is what caused a wall of privilege-escalation prompts in
+	// the original design, so network shares are opt-in only.
+	SelectedSMBShares  []SMBShare
+	SelectedNFSExports []NFSExport
+
 	CIDR     string // network range for SMB/NFS host discovery; "" = autodetect
 	Username string
 	Password string
+}
+
+// SMBShare identifies one discovered (not yet necessarily mounted) SMB
+// share.
+type SMBShare struct {
+	Host  string
+	Share string
+}
+
+// NFSExport identifies one discovered NFS export.
+type NFSExport struct {
+	Host   string
+	Export string
 }
 
 // ResolvedRoot is one real filesystem path ready to be walked by

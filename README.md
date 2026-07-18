@@ -48,12 +48,20 @@ glob patterns, the way the original two apps worked.
   ripgrep fast path when installed, falling back to a worker-pool walk
   otherwise), a graphical regex builder, file-type quick filters, context
   lines, size filters, and glob exclude patterns.
-- **Search Locations tab**: the main content is a tree of local drives
-  (labeled Internal/Removable/SD Card) and their subfolders, each with a
-  checkbox — checking a drive cascades to its expanded subfolders, but any
-  subfolder can be individually re-checked/unchecked. A sidebar controls
-  which location types to search (local drives / SMB shares / NFS
-  exports) and the SMB/NFS network range and credentials.
+- **Search Locations tab**: a tree of local drives (labeled Internal/
+  Removable/SD Card) and their subfolders, each with a checkbox —
+  checking a drive cascades to its expanded subfolders, but any subfolder
+  can be individually re-checked/unchecked. Network shares are opt-in: a
+  "Scan for shares" button lists every SMB share/NFS export found on the
+  network range, and only the ones you check get mounted — there's no
+  "mount everything discovered" fallback, since blindly mounting every
+  share on every LAN host means a wall of privilege-escalation prompts.
+  All shares selected for one search are mounted in a single elevated
+  batch (one `pkexec`/`sudo` prompt per search, not one per share), and
+  the SMB username/password fields are reused for every mount for the
+  rest of the session (never written to disk). A sidebar has the
+  Local/SMB/NFS master toggles, the network range, and a prominent
+  Search button.
 - **Results tab**: one sortable list (Name / Location / Modified / Size)
   across every matched file, local or network, with a content-match
   preview pane and the usual open/open-with/show-in-file-manager/copy-
@@ -75,8 +83,10 @@ the original Python app's config file.
 
 SMB/NFS mounting requires root. Rather than running the whole GUI as root
 (what the original LanSearch did), only the `mount`/`umount` calls are
-elevated individually via `pkexec` (falling back to `sudo`) — the rest of
-the app always runs as your normal user.
+elevated via `pkexec` (falling back to `sudo`) — the rest of the app
+always runs as your normal user. All mounts for a given search are
+batched into one elevated shell script, so selecting several shares still
+means only one authentication prompt, not one per share.
 
 ## Tests
 
