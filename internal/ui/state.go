@@ -45,6 +45,7 @@ type App struct {
 	details  *detailsTab
 	overview *overviewTab
 	favTab   *favoritesTab
+	network  *networkTab
 }
 
 // runOnUI marshals fn onto the Fyne UI goroutine. Every mutation of a

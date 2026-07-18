@@ -38,6 +38,7 @@ func (a *App) buildMainWindow() {
 	a.details = newDetailsTab(a)
 	a.overview = newOverviewTab(a)
 	a.favTab = newFavoritesTab(a)
+	a.network = newNetworkTab(a)
 
 	a.tabs = container.NewAppTabs(
 		container.NewTabItem("Basic", a.basic.build()),
@@ -45,6 +46,7 @@ func (a *App) buildMainWindow() {
 		container.NewTabItem("Result Details", a.details.build()),
 		container.NewTabItem("Result Overview", a.overview.build()),
 		container.NewTabItem("Favorite Results", a.favTab.build()),
+		container.NewTabItem("Network Search", a.network.build()),
 	)
 
 	a.statusBar = widget.NewLabel("Ready")

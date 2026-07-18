@@ -5,6 +5,8 @@
 package ui
 
 import (
+	"context"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 
@@ -43,6 +45,13 @@ func Run() {
 	go a.checkDependenciesOnStartup()
 
 	a.win.SetCloseIntercept(func() {
+		if a.cancelSearch != nil {
+			a.cancelSearch()
+		}
+		if a.network.cancelSearch != nil {
+			a.network.cancelSearch()
+		}
+		a.network.engine.Mounts.UnmountAll(context.Background())
 		a.saveWindowGeometry()
 		a.cfg.Save()
 		a.win.Close()
