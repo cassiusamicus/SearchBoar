@@ -4,6 +4,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"codeberg.org/cassiusamicus/Utilities/assets"
@@ -65,15 +66,16 @@ func (a *App) buildMainWindow() {
 	favSearchesContent := a.favSearches.build()
 	startContent := a.start.build()
 
-	// Visual tab order (independent of the build order above).
-	startItem := container.NewTabItem("Start", startContent)
+	// Visual tab order (independent of the build order above). Icons make
+	// these read unambiguously as tabs rather than plain text links.
+	startItem := container.NewTabItemWithIcon("Start", theme.HomeIcon(), startContent)
 	a.tabs = container.NewAppTabs(
 		startItem,
-		container.NewTabItem("Search Builder", builderContent),
-		container.NewTabItem("Search Locations", locationsContent),
-		container.NewTabItem("Results", resultsContent),
-		container.NewTabItem("Favorite Results", favContent),
-		container.NewTabItem("Favorite Searches", favSearchesContent),
+		container.NewTabItemWithIcon("Search Builder", theme.SearchIcon(), builderContent),
+		container.NewTabItemWithIcon("Search Locations", theme.StorageIcon(), locationsContent),
+		container.NewTabItemWithIcon("Results", theme.ListIcon(), resultsContent),
+		container.NewTabItemWithIcon("Favorite Results", theme.DocumentIcon(), favContent),
+		container.NewTabItemWithIcon("Favorite Searches", theme.HistoryIcon(), favSearchesContent),
 	)
 	a.tabs.OnSelected = func(item *container.TabItem) {
 		if item == startItem {

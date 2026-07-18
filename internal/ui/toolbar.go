@@ -24,16 +24,12 @@ func (a *App) buildToolbar() *widget.Toolbar {
 
 	t := widget.NewToolbar(
 		toolbarWidgetItem{obj: wordmark()},
-		widget.NewToolbarSeparator(),
 		widget.NewToolbarAction(theme.HomeIcon(), func() { a.tabs.SelectIndex(tabIndexStart) }),
 		a.searchButton,
 		widget.NewToolbarAction(theme.DocumentIcon(), func() { a.tabs.SelectIndex(tabIndexFavSearches) }),
 		widget.NewToolbarAction(theme.ListIcon(), func() { a.tabs.SelectIndex(tabIndexFavorites) }),
-		widget.NewToolbarSeparator(),
 		a.stopButton,
-		widget.NewToolbarSeparator(),
 		widget.NewToolbarAction(theme.SettingsIcon(), func() { a.openConfigFile() }),
-		widget.NewToolbarSeparator(),
 		widget.NewToolbarAction(theme.HelpIcon(), func() { a.showAboutDialog() }),
 	)
 	return t
