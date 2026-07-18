@@ -73,6 +73,13 @@ glob patterns, the way the original two apps worked.
   delete categories and reordering.
 - **Favorite Searches tab**: save/load/delete named filename/content
   patterns.
+- **Common Search Terms tab**: a short, user-curated list of content terms
+  you search for often. Adding one runs a search for it right away (over
+  the current Search Locations) and saves the matches to the cache
+  database; a refresh button on each term reindexes it later, e.g. after
+  files change. Nothing is indexed proactively — this is not a background
+  filesystem indexer, only an on-demand shortcut for terms you've told it
+  matter to you.
 - PDF and DOCX content extraction are built in (no external dependency
   required); `ripgrep` and `pdftotext` are optional speed/quality boosts,
   auto-detected with a per-distro install-command dialog if missing.
@@ -81,6 +88,25 @@ glob patterns, the way the original two apps worked.
 Configuration (recent searches, window geometry, favorites, stored
 searches) is stored at `~/.config/searchboar/config.ini`, compatible with
 the original Python app's config file.
+
+## Search result caching
+
+A small SQLite database at `~/.config/searchboar/cache.db` caches the text
+extracted from files you've searched (a plain read for text files, real
+extraction for PDF/DOCX), keyed by path/modification time/size, so a repeat
+search over an unchanged file skips re-extracting it. A cache entry is only
+served back for a file whose mtime and size still match what was cached, so
+a changed file is always re-read rather than served stale. Nothing is
+cached until a file is actually searched — the cache only ever grows from
+searches you've run (including via the Common Search Terms tab), never a
+background index.
+
+This cache has no effect on a search ripgrep handles directly (ripgrep
+reads files itself and is already fast for plain-text search) — its
+benefit shows up for PDF/DOCX-heavy searches, systems without ripgrep
+installed, and repeat searches over slow storage like a network share. The
+About dialog (the toolbar's `?` icon) shows the cache's current size and has
+a "Clear search cache" button.
 
 ## Network search and privileges
 

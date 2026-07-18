@@ -72,15 +72,24 @@ func (t *resultsTab) build() fyne.CanvasObject {
 	)
 	t.list.OnSelected = func(id widget.ListItemID) { t.renderPreview(id) }
 
-	t.previewTitle = widget.NewRichTextWithText("Select a result to preview it")
+	t.previewTitle = widget.NewRichText(&widget.TextSegment{Text: "Select a result to preview it", Style: widget.RichTextStyleSubHeading})
 	t.previewMeta = widget.NewLabel("")
+	t.previewMeta.Importance = widget.LowImportance
 	t.previewBody = container.NewVBox()
 
+	// Low importance keeps these navigation/action buttons visually quiet
+	// (flat, no background) so they don't compete with the filename title
+	// for attention -- an earlier version used default-importance buttons
+	// with full text labels stacked on their own row, which read as a wall
+	// of buttons at the same visual weight as the result itself.
 	t.prevBtn = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() { t.step(-1) })
 	t.nextBtn = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() { t.step(1) })
 	t.openBtn = widget.NewButtonWithIcon("Open", theme.MediaPlayIcon(), func() { t.openSelected() })
 	t.actionsBtn = widget.NewButtonWithIcon("Actions", theme.MoreVerticalIcon(), nil)
 	t.actionsBtn.OnTapped = func() { t.showActionsMenu(t.actionsBtn) }
+	for _, b := range []*widget.Button{t.prevBtn, t.nextBtn, t.openBtn, t.actionsBtn} {
+		b.Importance = widget.LowImportance
+	}
 	t.prevBtn.Disable()
 	t.nextBtn.Disable()
 	t.openBtn.Disable()
@@ -108,8 +117,10 @@ func (t *resultsTab) build() fyne.CanvasObject {
 
 	header := container.NewHBox(widget.NewLabel("Sort by:"), sortSelect, dirBtn, t.stopBtn, layout.NewSpacer(), t.countLabel)
 
+	buttonRow := container.NewHBox(t.prevBtn, t.nextBtn, t.openBtn, t.actionsBtn)
+	titleRow := container.NewBorder(nil, nil, nil, buttonRow, t.previewTitle)
 	previewPane := container.NewBorder(
-		container.NewVBox(t.previewTitle, t.previewMeta, container.NewHBox(t.prevBtn, t.nextBtn, t.openBtn, t.actionsBtn), widget.NewSeparator()),
+		container.NewVBox(titleRow, t.previewMeta, widget.NewSeparator()),
 		nil, nil, nil,
 		container.NewVScroll(t.previewBody),
 	)
@@ -182,7 +193,7 @@ func (t *resultsTab) renderPreview(displayIdx int) {
 	t.selIdx = displayIdx
 	res := t.app.searchResults[t.order[displayIdx]]
 
-	t.previewTitle.Segments = []widget.RichTextSegment{&widget.TextSegment{Text: res.Name, Style: widget.RichTextStyleStrong}}
+	t.previewTitle.Segments = []widget.RichTextSegment{&widget.TextSegment{Text: res.Name, Style: widget.RichTextStyleSubHeading}}
 	t.previewTitle.Refresh()
 	t.previewMeta.SetText(fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModTime(res.ModTime), formatSize(res.Size)))
 
@@ -298,6 +309,8 @@ func (t *resultsTab) resort() {
 		t.selIdx = -1
 		t.prevBtn.Disable()
 		t.nextBtn.Disable()
+		t.openBtn.Disable()
+		t.actionsBtn.Disable()
 	} else if t.selIdx < 0 {
 		t.renderPreview(0)
 		t.list.Select(0)
@@ -319,7 +332,7 @@ func (t *resultsTab) clear() {
 		t.countLabel.SetText("")
 	}
 	if t.previewTitle != nil {
-		t.previewTitle.Segments = []widget.RichTextSegment{&widget.TextSegment{Text: "Select a result to preview it", Style: widget.RichTextStyleInline}}
+		t.previewTitle.Segments = []widget.RichTextSegment{&widget.TextSegment{Text: "Select a result to preview it", Style: widget.RichTextStyleSubHeading}}
 		t.previewTitle.Refresh()
 	}
 	if t.previewMeta != nil {

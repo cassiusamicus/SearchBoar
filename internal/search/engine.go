@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"codeberg.org/cassiusamicus/Utilities/internal/cache"
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
 )
 
@@ -26,6 +27,14 @@ type Engine struct {
 	RipgrepPath   string // "" if ripgrep isn't on PATH
 	PdftotextPath string // "" if pdftotext isn't on PATH
 	MaxWorkers    int
+
+	// Cache, if set, is consulted before extracting a candidate file's text
+	// (a plain read for text files, real extraction for PDF/DOCX) and
+	// updated after -- so a repeat search over the same tree only pays the
+	// extraction cost once per unchanged file. A nil Cache disables this
+	// (every Cache method is a nil-safe no-op), and it's never consulted on
+	// the ripgrep fast path, which already reads files itself.
+	Cache *cache.Cache
 }
 
 // NewEngine builds an Engine with ripgrep/pdftotext auto-detected via PATH
@@ -67,6 +76,7 @@ func (e *Engine) Run(ctx context.Context, opts Options, results chan<- model.Fil
 	}
 
 	canUseRipgrep := e.RipgrepPath != "" &&
+		!opts.DisableRipgrep &&
 		contentRe != nil &&
 		opts.Recursive &&
 		!patternMentionsExt(opts.FilePattern, ".pdf") &&
@@ -192,32 +202,41 @@ func (e *Engine) searchFile(ctx context.Context, c candidate, opts Options, cont
 	}
 
 	ext := strings.ToLower(filepath.Ext(c.path))
-	var lines []string
 
+	var extract func() (string, error)
 	switch ext {
 	case ".pdf":
-		text, err := extractPDFText(ctx, e.PdftotextPath, c.path)
-		if err != nil {
-			return res, false
-		}
-		lines = strings.Split(text, "\n")
+		extract = func() (string, error) { return extractPDFText(ctx, e.PdftotextPath, c.path) }
 	case ".docx":
-		text, err := extractDOCXText(c.path)
-		if err != nil {
-			return res, false
-		}
-		lines = strings.Split(text, "\n")
+		extract = func() (string, error) { return extractDOCXText(c.path) }
 	default:
 		isBin, err := isBinaryFile(c.path)
 		if err != nil || isBin {
 			return res, false
 		}
-		lines, err = readLines(c.path)
-		if err != nil {
-			return res, false
-		}
+		extract = func() (string, error) { return readText(c.path) }
 	}
 
-	res.Matches = matchLinesInSlice(lines, contentRe, opts.ContextBefore, opts.ContextAfter)
+	text, err := e.extractText(c, extract)
+	if err != nil {
+		return res, false
+	}
+
+	res.Matches = matchLinesInSlice(splitLines(text), contentRe, opts.ContextBefore, opts.ContextAfter)
 	return res, len(res.Matches) > 0
+}
+
+// extractText returns c's text content, from the cache if a fresh entry
+// exists (same path, mtime, and size), otherwise via extract -- which it
+// then stores for next time.
+func (e *Engine) extractText(c candidate, extract func() (string, error)) (string, error) {
+	if text, ok := e.Cache.GetText(c.path, c.info.ModTime(), c.info.Size()); ok {
+		return text, nil
+	}
+	text, err := extract()
+	if err != nil {
+		return "", err
+	}
+	e.Cache.PutText(c.path, c.info.ModTime(), c.info.Size(), text)
+	return text, nil
 }

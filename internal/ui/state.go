@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"codeberg.org/cassiusamicus/Utilities/internal/cache"
 	"codeberg.org/cassiusamicus/Utilities/internal/config"
 	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
@@ -32,6 +33,7 @@ type App struct {
 	netEng    *netsearch.Engine
 	favStore  *favorites.Store
 	ssStore   *storedsearches.Store
+	cache     *cache.Cache // also referenced (nil-safe) via searchEng.Cache; kept here too for the About dialog's cache stats/clear button
 
 	tabs        *container.AppTabs
 	statusBar   *widget.Label
@@ -53,6 +55,7 @@ type App struct {
 	results     *resultsTab
 	favTab      *favoritesTab
 	favSearches *favoriteSearchesTab
+	commonTerms *commonTermsTab
 }
 
 // runOnUI marshals fn onto the Fyne UI goroutine. Every mutation of a

@@ -1,31 +1,34 @@
 package search
 
 import (
-	"bufio"
 	"os"
 	"regexp"
+	"strings"
 
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
 )
 
-// readLines reads a whole text file into lines. Files are expected to be
+// readText reads a whole text file's raw content. Files are expected to be
 // documents/source code (the original app's target use case), not
-// multi-gigabyte logs, so reading fully into memory keeps the context-window
-// slicing below trivially correct rather than streaming with a ring buffer.
-func readLines(path string) ([]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
+// multi-gigabyte logs, so reading fully into memory is fine; the result is
+// also what gets stored in the extraction cache, so it must be the file's
+// real content, not a line-limited scan of it.
+func readText(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	return string(b), err
+}
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+// splitLines splits extracted text into lines the way bufio.ScanLines would
+// (no trailing empty line for text ending in "\n", and "\r\n" endings
+// collapse the same as "\n"), so line numbers match whether the text was
+// just extracted or came back from the cache.
+func splitLines(text string) []string {
+	text = strings.TrimSuffix(text, "\n")
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimSuffix(l, "\r")
 	}
-	return lines, scanner.Err()
+	return lines
 }
 
 // matchLinesInSlice finds every line matching re and returns one

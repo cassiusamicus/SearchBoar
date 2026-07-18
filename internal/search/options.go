@@ -29,6 +29,14 @@ type Options struct {
 	// subfolder nested under an otherwise-checked drive can be individually
 	// unchecked.
 	ExcludeDirs []string
+
+	// DisableRipgrep forces the worker-pool walk path even when ripgrep is
+	// available. Ripgrep reads files itself, bypassing Engine.Cache
+	// entirely, so a caller that specifically wants this search's results
+	// cached (e.g. building/refreshing a common-search-term index) needs
+	// the walk path even though ripgrep would normally be faster for a
+	// one-off plain-text search.
+	DisableRipgrep bool
 }
 
 // Progress is a periodic, best-effort snapshot of an in-flight search;

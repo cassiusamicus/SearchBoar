@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/app"
 
 	"codeberg.org/cassiusamicus/Utilities/assets"
+	"codeberg.org/cassiusamicus/Utilities/internal/cache"
 	"codeberg.org/cassiusamicus/Utilities/internal/config"
 	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
 	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
@@ -28,13 +29,23 @@ func Run() {
 		cfg = config.New(config.DefaultPath())
 	}
 
+	searchEng := search.NewEngine()
+	// A cache that fails to open (e.g. a read-only home directory) just
+	// means repeat searches stay as fast/slow as they've always been --
+	// searchEng.Cache is nil-safe, so this never blocks startup.
+	resultCache, err := cache.Open(cache.DefaultPath())
+	if err == nil {
+		searchEng.Cache = resultCache
+	}
+
 	a := &App{
 		fyneApp:   app.NewWithID("com.epicureanfriends.searchboar"),
 		cfg:       cfg,
-		searchEng: search.NewEngine(),
+		searchEng: searchEng,
 		netEng:    netsearch.NewEngine(),
 		favStore:  favorites.LoadStore(cfg),
 		ssStore:   storedsearches.LoadStore(cfg),
+		cache:     resultCache,
 	}
 	a.fyneApp.SetIcon(assets.Icon())
 	a.fyneApp.Settings().SetTheme(nordTheme{})
@@ -55,6 +66,7 @@ func Run() {
 		a.netEng.Mounts.UnmountAll(context.Background())
 		a.saveWindowGeometry()
 		a.cfg.Save()
+		a.cache.Close()
 		a.win.Close()
 	})
 

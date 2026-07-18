@@ -58,6 +58,7 @@ func (a *App) buildMainWindow() {
 	a.favTab = newFavoritesTab(a)
 	a.favSearches = newFavoriteSearchesTab(a)
 	a.start = newStartTab(a)
+	a.commonTerms = newCommonTermsTab(a)
 
 	builderContent := a.builder.build()
 	locationsContent := a.locations.build()
@@ -65,10 +66,12 @@ func (a *App) buildMainWindow() {
 	favContent := a.favTab.build()
 	favSearchesContent := a.favSearches.build()
 	startContent := a.start.build()
+	commonTermsContent := a.commonTerms.build()
 
 	// Visual tab order (independent of the build order above). Icons make
 	// these read unambiguously as tabs rather than plain text links.
 	startItem := container.NewTabItemWithIcon("Start", theme.HomeIcon(), startContent)
+	commonTermsItem := container.NewTabItemWithIcon("Common Search Terms", theme.HistoryIcon(), commonTermsContent)
 	a.tabs = container.NewAppTabs(
 		startItem,
 		container.NewTabItemWithIcon("Search Builder", theme.SearchIcon(), builderContent),
@@ -76,10 +79,13 @@ func (a *App) buildMainWindow() {
 		container.NewTabItemWithIcon("Results", theme.ListIcon(), resultsContent),
 		container.NewTabItemWithIcon("Favorite Results", theme.DocumentIcon(), favContent),
 		container.NewTabItemWithIcon("Favorite Searches", theme.HistoryIcon(), favSearchesContent),
+		commonTermsItem,
 	)
 	a.tabs.OnSelected = func(item *container.TabItem) {
 		if item == startItem {
 			a.start.refresh()
+		} else if item == commonTermsItem {
+			a.commonTerms.refresh()
 		}
 	}
 
