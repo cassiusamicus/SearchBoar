@@ -1,11 +1,12 @@
 package ui
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -22,7 +23,11 @@ var fileTypeExtRegex = map[string]string{
 
 var fileTypeOrder = []string{"ALL", "MD", "ORG", "TXT", "HTML", "PDF", "DOCX"}
 
-type basicTab struct {
+// searchBuilderTab is the "Search Builder" tab: what to search for (regex
+// filename/content patterns, shared by local and network search since both
+// now run through the same internal/search engine), and the file-type
+// quick filters, context/size/exclude settings that go with it.
+type searchBuilderTab struct {
 	app *App
 
 	fileTypeChecks map[string]*widget.Check
@@ -31,18 +36,24 @@ type basicTab struct {
 	fileEntry      *widget.Entry
 	contentEnabled *widget.Check
 	contentCombo   *widget.SelectEntry
-	dirCombo       *widget.SelectEntry
 
 	recursiveCheck *widget.Check
 	caseCheck      *widget.Check
 	hiddenCheck    *widget.Check
+
+	beforeSpin *intSpinner
+	afterSpin  *intSpinner
+
+	minSizeEntry *widget.Entry
+	maxSizeEntry *widget.Entry
+	excludeEntry *widget.Entry
 }
 
-func newBasicTab(a *App) *basicTab {
-	return &basicTab{app: a, fileTypeChecks: map[string]*widget.Check{}}
+func newSearchBuilderTab(a *App) *searchBuilderTab {
+	return &searchBuilderTab{app: a, fileTypeChecks: map[string]*widget.Check{}}
 }
 
-func (b *basicTab) build() fyne.CanvasObject {
+func (b *searchBuilderTab) build() fyne.CanvasObject {
 	// fileEntry must exist before any checkbox fires onFileTypeToggled
 	// (which writes into it), so create it before wiring the checkboxes.
 	b.fileEntry = widget.NewEntry()
@@ -57,6 +68,7 @@ func (b *basicTab) build() fyne.CanvasObject {
 		typeRow.Add(chk)
 	}
 	b.fileTypeChecks["ALL"].SetChecked(true)
+
 	fileWizardBtn := widget.NewButton("Expr. Wizard", func() {
 		showRegexBuilderDialog(b.app.win, "File Name Pattern Builder", b.fileEntry.Text, func(pattern string) {
 			b.fileEntry.SetText(pattern)
@@ -77,29 +89,31 @@ func (b *basicTab) build() fyne.CanvasObject {
 	containingRow := container.NewBorder(nil, nil,
 		container.NewHBox(widget.NewLabel("Containing:"), b.contentEnabled), contentWizardBtn, b.contentCombo)
 
-	b.dirCombo = widget.NewSelectEntry(b.app.cfg.Recent.Paths)
-	if len(b.app.cfg.Recent.Paths) > 0 {
-		b.dirCombo.SetText(b.app.cfg.Recent.Paths[0])
-	} else if home, err := homeDir(); err == nil {
-		b.dirCombo.SetText(home)
-	}
-	b.dirCombo.OnSubmitted = func(string) { b.app.startSearch() }
-	browseBtn := widget.NewButton("Browse...", func() {
-		d := dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
-			if err != nil || uri == nil {
-				return
-			}
-			b.dirCombo.SetText(uri.Path())
-		}, b.app.win)
-		d.Show()
-	})
-	lookInRow := container.NewBorder(nil, nil, widget.NewLabel("Look in:"), browseBtn, b.dirCombo)
-
 	b.recursiveCheck = widget.NewCheck("Search in subdirectories", nil)
 	b.recursiveCheck.SetChecked(true)
 	b.caseCheck = widget.NewCheck("Case sensitive", nil)
 	b.hiddenCheck = widget.NewCheck("Include hidden files", nil)
 	optionsRow := container.NewHBox(b.recursiveCheck, b.caseCheck, b.hiddenCheck)
+
+	b.beforeSpin = newIntSpinner(0, 10, 2)
+	b.afterSpin = newIntSpinner(0, 10, 2)
+	contextCard := widget.NewCard("Context Lines", "", container.NewHBox(
+		widget.NewLabel("Lines before:"), b.beforeSpin.build(),
+		widget.NewLabel("Lines after:"), b.afterSpin.build(),
+	))
+
+	b.minSizeEntry = widget.NewEntry()
+	b.minSizeEntry.SetText("0")
+	b.maxSizeEntry = widget.NewEntry()
+	b.maxSizeEntry.SetText("0")
+	sizeCard := widget.NewCard("File Size Filter", "", container.NewHBox(
+		widget.NewLabel("Min size (KB):"), b.minSizeEntry,
+		widget.NewLabel("Max size (KB):"), b.maxSizeEntry,
+	))
+
+	b.excludeEntry = widget.NewEntry()
+	b.excludeEntry.SetPlaceHolder("e.g., *.pyc,*.o,*.tmp")
+	excludeCard := widget.NewCard("Exclude Patterns (glob, comma-separated)", "", b.excludeEntry)
 
 	help := widget.NewAccordion(widget.NewAccordionItem("Search Help", searchHelpContent()))
 
@@ -107,8 +121,10 @@ func (b *basicTab) build() fyne.CanvasObject {
 		widget.NewLabel("File Types:"), typeRow,
 		filesRow,
 		containingRow,
-		lookInRow,
 		widget.NewCard("Options", "", optionsRow),
+		contextCard,
+		sizeCard,
+		excludeCard,
 		help,
 	)
 }
@@ -134,7 +150,7 @@ func searchHelpContent() fyne.CanvasObject {
 // onFileTypeToggled reimplements the original app's checkbox interaction:
 // checking ALL clears the others; checking a specific type unchecks ALL and
 // combines every checked type into one filename regex.
-func (b *basicTab) onFileTypeToggled(changed string) {
+func (b *searchBuilderTab) onFileTypeToggled(changed string) {
 	if b.updatingTypes {
 		return
 	}
@@ -167,4 +183,43 @@ func (b *basicTab) onFileTypeToggled(changed string) {
 		return
 	}
 	b.fileEntry.SetText(".*(" + strings.Join(parts, "|") + ")$")
+}
+
+func (b *searchBuilderTab) minSizeBytes() int64 {
+	kb, _ := strconv.ParseInt(b.minSizeEntry.Text, 10, 64)
+	return kb * 1024
+}
+
+func (b *searchBuilderTab) maxSizeBytes() int64 {
+	kb, _ := strconv.ParseInt(b.maxSizeEntry.Text, 10, 64)
+	return kb * 1024
+}
+
+// intSpinner is a minimal +/- numeric stepper; Fyne has no built-in spin
+// button widget.
+type intSpinner struct {
+	min, max, value int
+	label           *widget.Label
+}
+
+func newIntSpinner(min, max, value int) *intSpinner {
+	return &intSpinner{min: min, max: max, value: value}
+}
+
+func (s *intSpinner) build() fyne.CanvasObject {
+	s.label = widget.NewLabel(strconv.Itoa(s.value))
+	dec := widget.NewButton("-", func() { s.set(s.value - 1) })
+	inc := widget.NewButton("+", func() { s.set(s.value + 1) })
+	return container.NewHBox(dec, s.label, inc)
+}
+
+func (s *intSpinner) set(v int) {
+	if v < s.min {
+		v = s.min
+	}
+	if v > s.max {
+		v = s.max
+	}
+	s.value = v
+	s.label.SetText(fmt.Sprintf("%d", v))
 }

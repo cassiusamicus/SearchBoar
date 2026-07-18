@@ -219,6 +219,24 @@ func TestExcludeGlobs(t *testing.T) {
 	}
 }
 
+func TestExcludeDirs(t *testing.T) {
+	dir := t.TempDir()
+	buildTree(t, dir)
+
+	e := &Engine{MaxWorkers: 2}
+	got := runCollect(t, e, Options{
+		Dir:         dir,
+		FilePattern: `\.txt$`,
+		Recursive:   true,
+		ExcludeDirs: []string{filepath.Join(dir, "sub")},
+	})
+	for _, r := range got {
+		if r.Name == "c.txt" {
+			t.Errorf("c.txt is inside an excluded directory and should not have been found")
+		}
+	}
+}
+
 func TestHiddenFiles(t *testing.T) {
 	dir := t.TempDir()
 	buildTree(t, dir)

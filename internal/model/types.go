@@ -10,6 +10,14 @@ type FileEntry struct {
 	Name    string
 	ModTime time.Time
 	Size    int64
+
+	// DisplayPath is shown to the user in place of Path when set --
+	// used for files found under a mounted network share, where Path is a
+	// local mount-point path (e.g. "/tmp/searchboar-smb-123/doc.pdf") but
+	// the user should see the network-style path (e.g.
+	// "//host/share/doc.pdf"). Empty for ordinary local files, where Path
+	// itself is already what should be shown.
+	DisplayPath string
 }
 
 // ContentMatch is one block of context lines around a content-search hit.

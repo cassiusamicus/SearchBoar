@@ -12,14 +12,17 @@ import (
 )
 
 // showStoredSearchesDialog reimplements the "Stored Searches" dialog:
-// save the current Basic-tab search, load a saved one back into the Basic
-// tab, or delete one.
+// save the current Search Builder pattern, load a saved one back into it,
+// or delete one. Stored searches capture the filename/content pattern
+// only -- since where to search is now a persistent location-picker state
+// rather than a single directory, there's no per-search directory to
+// save/restore.
 func (a *App) showStoredSearchesDialog() {
 	searches := a.ssStore.List()
 	selected := -1
 
 	table := widget.NewTable(
-		func() (int, int) { return len(searches), 4 },
+		func() (int, int) { return len(searches), 3 },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
 		func(id widget.TableCellID, o fyne.CanvasObject) {
 			l := o.(*widget.Label)
@@ -35,15 +38,13 @@ func (a *App) showStoredSearchesDialog() {
 				l.SetText(s.FilePattern)
 			case 2:
 				l.SetText(s.ContentPattern)
-			case 3:
-				l.SetText(s.Directory)
 			}
 		},
 	)
 	table.ShowHeaderRow = true
 	table.CreateHeader = func() fyne.CanvasObject { return widget.NewLabel("") }
 	table.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		headers := []string{"Name", "File Pattern", "Content Pattern", "Directory"}
+		headers := []string{"Name", "File Pattern", "Content Pattern"}
 		o.(*widget.Label).SetText(headers[id.Col])
 	}
 	table.OnSelected = func(id widget.TableCellID) { selected = id.Row }
@@ -61,9 +62,8 @@ func (a *App) showStoredSearchesDialog() {
 			return
 		}
 		s := searches[selected]
-		a.basic.fileEntry.SetText(s.FilePattern)
-		a.basic.contentCombo.SetText(s.ContentPattern)
-		a.basic.dirCombo.SetText(s.Directory)
+		a.builder.fileEntry.SetText(s.FilePattern)
+		a.builder.contentCombo.SetText(s.ContentPattern)
 		if win != nil {
 			win.Hide()
 		}
@@ -90,7 +90,7 @@ func (a *App) showStoredSearchesDialog() {
 	)
 
 	win = dialog.NewCustom("Stored Searches", "Close", content, a.win)
-	win.Resize(fyne.NewSize(600, 400))
+	win.Resize(fyne.NewSize(500, 400))
 	win.Show()
 }
 
@@ -100,9 +100,8 @@ func (a *App) promptSaveCurrentSearch(onSaved func()) {
 			return
 		}
 		err := a.ssStore.Add(name, config.StoredSearch{
-			FilePattern:    a.basic.fileEntry.Text,
-			ContentPattern: a.basic.contentCombo.Text,
-			Directory:      a.basic.dirCombo.Text,
+			FilePattern:    a.builder.fileEntry.Text,
+			ContentPattern: a.builder.contentCombo.Text,
 		})
 		if err != nil {
 			a.setStatus(err.Error())

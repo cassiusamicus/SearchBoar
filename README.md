@@ -34,22 +34,31 @@ Or run a single search from the terminal without opening the GUI:
 
 ## Features
 
-- **Basic / Advanced tabs**: filename and content regex search (with a
+Local and network search share one regex-based engine and one set of
+result tabs — there's no separate "network search mode" with its own
+glob patterns, the way the original two apps worked.
+
+- **Search Locations tab**: the main content is a tree of local drives
+  (labeled Internal/Removable/SD Card) and their subfolders, each with a
+  checkbox — checking a drive cascades to its expanded subfolders, but any
+  subfolder can be individually re-checked/unchecked. A sidebar controls
+  which location types to search (local drives / SMB shares / NFS
+  exports) and the SMB/NFS network range and credentials.
+- **Search Builder tab**: filename and content regex search (with a
   ripgrep fast path when installed, falling back to a worker-pool walk
-  otherwise), a graphical regex builder, context lines, size filters, and
-  glob exclude patterns.
-- **Result Details / Result Overview tabs**: a sortable file table with a
-  line-numbered, match-highlighted content viewer, and a card-style
-  overview with inline match previews.
+  otherwise), a graphical regex builder, file-type quick filters, context
+  lines, size filters, and glob exclude patterns.
+- **Results tab**: one sortable list (Name / Location / Modified / Size)
+  across every matched file, local or network, with a content-match
+  preview pane and the usual open/open-with/show-in-file-manager/copy-
+  path/favorite/delete actions.
 - **Favorite Results tab**: categorized favorites with add/rename/move/
   delete categories and reordering.
-- **Stored Searches**: save/load/delete named search configurations.
-- **Network Search tab**: a drive/path picker (local drives labeled
-  Internal/Removable/SD Card, with cascading checkboxes down to individual
-  subfolders) plus SMB share and NFS export search across your LAN.
+- **Stored Searches**: save/load/delete named filename/content patterns.
 - PDF and DOCX content extraction are built in (no external dependency
   required); `ripgrep` and `pdftotext` are optional speed/quality boosts,
   auto-detected with a per-distro install-command dialog if missing.
+- A Nord-palette dark theme.
 
 Configuration (recent searches, window geometry, favorites, stored
 searches) is stored at `~/.config/searchboar/config.ini`, compatible with

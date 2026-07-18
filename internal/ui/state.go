@@ -10,6 +10,7 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/internal/config"
 	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
+	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
 	"codeberg.org/cassiusamicus/Utilities/internal/search"
 	"codeberg.org/cassiusamicus/Utilities/internal/storedsearches"
 )
@@ -17,14 +18,20 @@ import (
 // App is the shared hub every tab/dialog closes over: config, engines,
 // stores, and the handful of top-level widgets other tabs need to update
 // (status bar, tab switcher, search/stop buttons).
+//
+// Local and network search share one pattern engine (internal/search,
+// regex-based): internal/netsearch only discovers and mounts locations
+// (local drives, SMB shares, NFS exports); once a location is a real
+// filesystem path, it's searched exactly like any local directory.
 type App struct {
 	fyneApp fyne.App
 	win     fyne.Window
 
-	cfg      *config.Config
-	engine   *search.Engine
-	favStore *favorites.Store
-	ssStore  *storedsearches.Store
+	cfg       *config.Config
+	searchEng *search.Engine
+	netEng    *netsearch.Engine
+	favStore  *favorites.Store
+	ssStore   *storedsearches.Store
 
 	tabs        *container.AppTabs
 	statusBar   *widget.Label
@@ -35,17 +42,15 @@ type App struct {
 
 	cancelSearch context.CancelFunc
 
-	// results holds the full result set of the most recently completed (or
-	// in-progress) search, shared by the Details/Overview tabs and the
+	// searchResults holds the full result set of the most recently
+	// completed (or in-progress) search, shared by the Results tab and the
 	// favorite/context-menu actions.
-	results []model.FileResult
+	searchResults []model.FileResult
 
-	basic    *basicTab
-	advanced *advancedTab
-	details  *detailsTab
-	overview *overviewTab
-	favTab   *favoritesTab
-	network  *networkTab
+	locations *locationsTab
+	builder   *searchBuilderTab
+	results   *resultsTab
+	favTab    *favoritesTab
 }
 
 // runOnUI marshals fn onto the Fyne UI goroutine. Every mutation of a

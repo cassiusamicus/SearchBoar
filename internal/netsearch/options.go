@@ -1,17 +1,18 @@
-// Package netsearch implements LanSearch's network file search: local
-// drives, SMB shares, and NFS exports, searched with a glob pattern. It has
-// no GUI dependency.
+// Package netsearch discovers and mounts search locations: local drives,
+// SMB shares, and NFS exports. It does not walk or match files itself --
+// once a location is a real local path (a drive's mount point, or a
+// freshly mounted SMB/NFS share), internal/search's engine does the actual
+// walking/matching, so local and network search share one pattern
+// language (regex) and one set of features (content search, PDF/DOCX
+// extraction, ripgrep) instead of two parallel implementations.
 package netsearch
 
-// Options controls a single network search run.
-type Options struct {
-	Pattern string // shell glob, e.g. "*.{jpg,png}" -- matches the original LanSearch's Pattern Builder output
+// LocationOptions controls which locations ResolveRoots discovers.
+type LocationOptions struct {
+	// LocalRoots are the specific local paths to search (from the Search
+	// Locations picker). If empty, every mounted local drive is used.
+	LocalRoots []string
 
-	// LocalRoots are the specific local paths to search (from the drive
-	// picker). If empty, every mounted local drive is searched (the
-	// original app's blanket behavior).
-	LocalRoots  []string
-	ExcludeDirs []string // paths (and their descendants) to skip within LocalRoots
 	SearchLocal bool
 	SearchSMB   bool
 	SearchNFS   bool
@@ -21,12 +22,12 @@ type Options struct {
 	Password string
 }
 
-// Result is one matched file, from any source.
-type Result struct {
-	NetworkPath string // display path: local path, //host/share/..., or host:export/...
-	LocalPath   string // actual filesystem path to open (under a mount point for SMB/NFS)
-	Modified    string
-	Size        int64
+// ResolvedRoot is one real filesystem path ready to be walked by
+// internal/search, plus the display prefix (if any) to translate its
+// results' local mount-point paths back into a network-style path.
+type ResolvedRoot struct {
+	Path          string
+	DisplayPrefix string // "" for local roots; "//host/share" or "host:export" otherwise
 }
 
 // LogLine is one line for the search log pane.

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -82,42 +81,4 @@ func listSMBShares(ctx context.Context, host, user, pass string) ([]string, erro
 		shares = append(shares, name)
 	}
 	return shares, scanner.Err()
-}
-
-func (e *Engine) searchSMB(ctx context.Context, opts Options, cidr string, results chan<- Result, log func(level, msg string)) error {
-	hosts, err := discoverSMBHosts(ctx, cidr)
-	if err != nil {
-		log("WARN", "SMB host discovery failed: "+err.Error())
-	}
-	if len(hosts) == 0 {
-		log("INFO", "No SMB hosts found (install nmap for host discovery, or none have port 445 open)")
-		return nil
-	}
-
-	for _, host := range hosts {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		shares, err := listSMBShares(ctx, host, opts.Username, opts.Password)
-		if err != nil {
-			log("WARN", fmt.Sprintf("could not list shares on %s: %v", host, err))
-			continue
-		}
-		for _, share := range shares {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			mountPoint, err := e.Mounts.MountCIFS(ctx, host, share, opts.Username, opts.Password)
-			if err != nil {
-				log("WARN", fmt.Sprintf("mount //%s/%s failed: %v", host, share, err))
-				continue
-			}
-			log("INFO", fmt.Sprintf("Searching //%s/%s", host, share))
-			prefix := fmt.Sprintf("//%s/%s", host, share)
-			if err := walkAndMatch(ctx, mountPoint, opts.Pattern, prefix, results); err != nil && ctx.Err() != nil {
-				return ctx.Err()
-			}
-		}
-	}
-	return nil
 }

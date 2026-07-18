@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"net"
 	"os/exec"
 	"strings"
@@ -62,38 +61,4 @@ func incIP(ip net.IP) {
 			break
 		}
 	}
-}
-
-func (e *Engine) searchNFS(ctx context.Context, opts Options, cidr string, results chan<- Result, log func(level, msg string)) error {
-	hosts, err := hostsInCIDR(cidr, maxNFSHostsScanned)
-	if err != nil {
-		log("ERROR", "invalid network range for NFS scan: "+err.Error())
-		return err
-	}
-
-	for _, host := range hosts {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		exports, err := discoverNFSExports(ctx, host)
-		if err != nil {
-			continue // most scanned hosts won't run NFS at all; not worth a log line each
-		}
-		for _, export := range exports {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			mountPoint, err := e.Mounts.MountNFS(ctx, host, export)
-			if err != nil {
-				log("WARN", fmt.Sprintf("mount %s:%s failed: %v", host, export, err))
-				continue
-			}
-			log("INFO", fmt.Sprintf("Searching %s:%s", host, export))
-			prefix := fmt.Sprintf("%s:%s", host, export)
-			if err := walkAndMatch(ctx, mountPoint, opts.Pattern, prefix, results); err != nil && ctx.Err() != nil {
-				return ctx.Err()
-			}
-		}
-	}
-	return nil
 }

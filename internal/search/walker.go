@@ -22,6 +22,11 @@ func collectCandidates(ctx context.Context, opts Options, filenameRe *regexp.Reg
 	var out []candidate
 	root := opts.Dir
 
+	excludeDirs := make(map[string]bool, len(opts.ExcludeDirs))
+	for _, d := range opts.ExcludeDirs {
+		excludeDirs[d] = true
+	}
+
 	walkFn := func(path string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -36,6 +41,9 @@ func collectCandidates(ctx context.Context, opts Options, filenameRe *regexp.Reg
 		if d.IsDir() {
 			if path == root {
 				return nil
+			}
+			if excludeDirs[path] {
+				return filepath.SkipDir
 			}
 			if hidden && !opts.IncludeHidden {
 				return filepath.SkipDir

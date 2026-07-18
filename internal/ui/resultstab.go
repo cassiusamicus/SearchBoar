@@ -2,103 +2,124 @@ package ui
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
 )
 
-type detailsTab struct {
+// resultsTab is the unified "Results" tab: every match (local and
+// network) in one sortable, icon-led list -- Name / Location / Modified /
+// Size, styled after epicorg's FilePicker -- plus a content-match preview
+// pane and the usual open/context-menu actions.
+type resultsTab struct {
 	app *App
 
-	sortCol int // 0=name, 1=modified, 2=size
+	sortCol int // 0=name, 1=location, 2=modified, 3=size
 	sortAsc bool
-	order   []int // display row -> app.results index
-	selRow  int   // -1 if none
+	order   []int
+	selRow  int
 
 	table  *widget.Table
 	viewer *widget.TextGrid
 }
 
-func newDetailsTab(a *App) *detailsTab {
-	return &detailsTab{app: a, sortCol: 0, sortAsc: true, selRow: -1}
+func newResultsTab(a *App) *resultsTab {
+	return &resultsTab{app: a, sortAsc: true, selRow: -1}
 }
 
-func (t *detailsTab) build() fyne.CanvasObject {
+func (t *resultsTab) build() fyne.CanvasObject {
 	t.table = widget.NewTable(
-		func() (int, int) { return len(t.order), 3 },
-		func() fyne.CanvasObject { return newTappableLabel() },
-		func(id widget.TableCellID, o fyne.CanvasObject) { t.updateCell(id, o.(*tappableLabel)) },
+		func() (int, int) { return len(t.order), 4 },
+		func() fyne.CanvasObject { return newTappableBox() },
+		func(id widget.TableCellID, o fyne.CanvasObject) { t.updateCell(id, o.(*tappableBox)) },
 	)
 	t.table.ShowHeaderRow = true
 	t.table.CreateHeader = func() fyne.CanvasObject { return widget.NewButton("", nil) }
 	t.table.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
 		b := o.(*widget.Button)
-		switch id.Col {
-		case 0:
-			b.SetText("File")
-		case 1:
-			b.SetText("Modified")
-		case 2:
-			b.SetText("Size")
-		}
+		headers := []string{"Name", "Location", "Modified", "Size"}
+		b.SetText(headers[id.Col])
 		col := id.Col
 		b.OnTapped = func() { t.sortBy(col) }
 	}
-	t.table.SetColumnWidth(0, 300)
-	t.table.SetColumnWidth(1, 150)
-	t.table.SetColumnWidth(2, 100)
+	t.table.SetColumnWidth(0, 220)
+	t.table.SetColumnWidth(1, 260)
+	t.table.SetColumnWidth(2, 150)
+	t.table.SetColumnWidth(3, 90)
 
 	t.viewer = widget.NewTextGrid()
-	t.viewer.ShowLineNumbers = false
 
 	split := container.NewHSplit(
 		container.NewBorder(widget.NewLabel("Files Found"), nil, nil, nil, t.table),
 		container.NewBorder(widget.NewLabel("Content Matches"), nil, nil, nil, container.NewVScroll(t.viewer)),
 	)
-	split.Offset = 0.4
+	split.Offset = 0.45
 	return split
 }
 
-func (t *detailsTab) updateCell(id widget.TableCellID, l *tappableLabel) {
+func (t *resultsTab) updateCell(id widget.TableCellID, box *tappableBox) {
 	if id.Row >= len(t.order) {
-		l.SetText("")
+		box.SetObjects(nil)
 		return
 	}
-	res := t.app.results[t.order[id.Row]]
+	res := t.app.searchResults[t.order[id.Row]]
+
 	switch id.Col {
 	case 0:
-		l.SetText(res.Name)
+		icon := widget.NewIcon(theme.FileIcon())
+		box.SetObjects([]fyne.CanvasObject{icon, widget.NewLabel(res.Name)})
 	case 1:
-		l.SetText(formatModTime(res.ModTime))
+		box.SetObjects([]fyne.CanvasObject{widget.NewLabel(filepath.Dir(displayPath(res)))})
 	case 2:
-		l.SetText(formatSize(res.Size))
+		box.SetObjects([]fyne.CanvasObject{widget.NewLabel(formatModTime(res.ModTime))})
+	case 3:
+		box.SetObjects([]fyne.CanvasObject{widget.NewLabel(formatSize(res.Size))})
 	}
-	l.OnTapped = func() { t.selectRow(id.Row) }
-	l.OnDoubleTapped = func() { t.openRow(id.Row) }
-	l.OnSecondaryTapped = func(e *fyne.PointEvent) {
-		t.selectRow(id.Row)
-		rec := t.recordFor(id.Row)
+
+	row := id.Row
+	box.OnTapped = func() { t.selectRow(row) }
+	box.OnDoubleTapped = func() { t.openRow(row) }
+	box.OnSecondaryTapped = func(e *fyne.PointEvent) {
+		t.selectRow(row)
+		rec := t.recordFor(row)
 		menu := t.app.fileContextMenu(rec, func() { t.table.Refresh() })
 		widget.ShowPopUpMenuAtPosition(menu, t.app.win.Canvas(), e.AbsolutePosition)
 	}
 }
 
-func (t *detailsTab) recordFor(row int) fileRecord {
-	res := t.app.results[t.order[row]]
-	return fileRecord{Path: res.Path, Name: res.Name, ModifiedStr: formatModTime(res.ModTime), Size: res.Size, SizeHuman: formatSize(res.Size)}
+// displayPath prefers a result's network-style DisplayPath (for files
+// found under a mounted SMB/NFS share) over its raw local mount-point Path.
+func displayPath(res model.FileResult) string {
+	if res.DisplayPath != "" {
+		return res.DisplayPath
+	}
+	return res.Path
 }
 
-func (t *detailsTab) selectRow(row int) {
+func (t *resultsTab) recordFor(row int) fileRecord {
+	res := t.app.searchResults[t.order[row]]
+	return fileRecord{
+		Path:        res.Path,
+		Name:        res.Name,
+		ModifiedStr: formatModTime(res.ModTime),
+		Size:        res.Size,
+		SizeHuman:   formatSize(res.Size),
+	}
+}
+
+func (t *resultsTab) selectRow(row int) {
 	t.selRow = row
-	t.showMatches(t.app.results[t.order[row]])
+	t.showMatches(t.app.searchResults[t.order[row]])
 }
 
-func (t *detailsTab) openRow(row int) {
-	res := t.app.results[t.order[row]]
+func (t *resultsTab) openRow(row int) {
+	res := t.app.searchResults[t.order[row]]
 	if err := t.app.openResult(res.Path); err != nil {
 		t.app.setStatus("Failed to open: " + err.Error())
 	}
@@ -107,15 +128,13 @@ func (t *detailsTab) openRow(row int) {
 var (
 	matchStyle  = &widget.CustomTextGridStyle{FGColor: whiteColor, BGColor: brandBlue, TextStyle: fyne.TextStyle{Bold: true}}
 	lineNoStyle = &widget.CustomTextGridStyle{FGColor: brandBlue, TextStyle: fyne.TextStyle{Bold: true}}
+	whiteColor  = &fyneColor{r: 0xFF, g: 0xFF, b: 0xFF, a: 0xFF}
 )
-
-var whiteColor = &fyneColor{r: 0xFF, g: 0xFF, b: 0xFF, a: 0xFF}
 
 // showMatches renders each ContentMatch block separated by a dashed line,
 // each context line prefixed with a right-aligned line number, and
-// highlights every content-regex occurrence on the actual match line --
-// mirroring the original app's Result Details match viewer.
-func (t *detailsTab) showMatches(res model.FileResult) {
+// highlights every content-regex occurrence on the actual match line.
+func (t *resultsTab) showMatches(res model.FileResult) {
 	var b []byte
 	type styledRange struct {
 		row, start, end int
@@ -153,7 +172,7 @@ func (t *detailsTab) showMatches(res model.FileResult) {
 	}
 }
 
-func (t *detailsTab) sortBy(col int) {
+func (t *resultsTab) sortBy(col int) {
 	if t.sortCol == col {
 		t.sortAsc = !t.sortAsc
 	} else {
@@ -163,21 +182,23 @@ func (t *detailsTab) sortBy(col int) {
 	t.resort()
 }
 
-// resort rebuilds the display order from t.app.results, called both when
-// the sort column/direction changes and whenever new results arrive.
-func (t *detailsTab) resort() {
-	order := make([]int, len(t.app.results))
+// resort rebuilds the display order from t.app.searchResults, called both
+// when the sort column/direction changes and whenever new results arrive.
+func (t *resultsTab) resort() {
+	order := make([]int, len(t.app.searchResults))
 	for i := range order {
 		order[i] = i
 	}
-	results := t.app.results
+	results := t.app.searchResults
 	less := func(i, j int) bool {
 		a, b := results[order[i]], results[order[j]]
 		var lt bool
 		switch t.sortCol {
 		case 1:
-			lt = a.ModTime.Before(b.ModTime)
+			lt = filepath.Dir(displayPath(a)) < filepath.Dir(displayPath(b))
 		case 2:
+			lt = a.ModTime.Before(b.ModTime)
+		case 3:
 			lt = a.Size < b.Size
 		default:
 			lt = a.Name < b.Name
@@ -192,7 +213,11 @@ func (t *detailsTab) resort() {
 	t.table.Refresh()
 }
 
-func (t *detailsTab) clear() {
+func (t *resultsTab) addResult(model.FileResult) {
+	t.resort()
+}
+
+func (t *resultsTab) clear() {
 	t.order = nil
 	t.selRow = -1
 	t.viewer.SetText("")

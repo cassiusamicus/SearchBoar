@@ -49,20 +49,16 @@ type toolbarWidgetItem struct{ obj fyne.CanvasObject }
 func (t toolbarWidgetItem) ToolbarObject() fyne.CanvasObject { return t.obj }
 
 func (a *App) buildMainWindow() {
-	a.basic = newBasicTab(a)
-	a.advanced = newAdvancedTab(a)
-	a.details = newDetailsTab(a)
-	a.overview = newOverviewTab(a)
+	a.locations = newLocationsTab(a)
+	a.builder = newSearchBuilderTab(a)
+	a.results = newResultsTab(a)
 	a.favTab = newFavoritesTab(a)
-	a.network = newNetworkTab(a)
 
 	a.tabs = container.NewAppTabs(
-		container.NewTabItem("Basic", a.basic.build()),
-		container.NewTabItem("Advanced", a.advanced.build()),
-		container.NewTabItem("Result Details", a.details.build()),
-		container.NewTabItem("Result Overview", a.overview.build()),
+		container.NewTabItem("Search Locations", a.locations.build()),
+		container.NewTabItem("Search Builder", a.builder.build()),
+		container.NewTabItem("Results", a.results.build()),
 		container.NewTabItem("Favorite Results", a.favTab.build()),
-		container.NewTabItem("Network Search", a.network.build()),
 	)
 
 	a.statusBar = widget.NewLabel("Ready")

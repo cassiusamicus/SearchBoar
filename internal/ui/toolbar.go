@@ -9,12 +9,10 @@ import (
 )
 
 const (
-	tabIndexBasic = iota
-	tabIndexAdvanced
-	tabIndexDetails
-	tabIndexOverview
+	tabIndexLocations = iota
+	tabIndexBuilder
+	tabIndexResults
 	tabIndexFavorites
-	tabIndexNetwork
 )
 
 func (a *App) buildToolbar() *widget.Toolbar {
@@ -25,7 +23,7 @@ func (a *App) buildToolbar() *widget.Toolbar {
 	t := widget.NewToolbar(
 		toolbarWidgetItem{obj: wordmark()},
 		widget.NewToolbarSeparator(),
-		widget.NewToolbarAction(theme.HomeIcon(), func() { a.tabs.SelectIndex(tabIndexBasic) }),
+		widget.NewToolbarAction(theme.HomeIcon(), func() { a.tabs.SelectIndex(tabIndexLocations) }),
 		a.searchButton,
 		widget.NewToolbarAction(theme.DocumentIcon(), func() { a.showStoredSearchesDialog() }),
 		widget.NewToolbarAction(theme.ListIcon(), func() { a.tabs.SelectIndex(tabIndexFavorites) }),

@@ -13,6 +13,7 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/assets"
 	"codeberg.org/cassiusamicus/Utilities/internal/config"
 	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
+	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
 	"codeberg.org/cassiusamicus/Utilities/internal/search"
 	"codeberg.org/cassiusamicus/Utilities/internal/storedsearches"
 )
@@ -28,11 +29,12 @@ func Run() {
 	}
 
 	a := &App{
-		fyneApp:  app.NewWithID("com.epicureanfriends.searchboar"),
-		cfg:      cfg,
-		engine:   search.NewEngine(),
-		favStore: favorites.LoadStore(cfg),
-		ssStore:  storedsearches.LoadStore(cfg),
+		fyneApp:   app.NewWithID("com.epicureanfriends.searchboar"),
+		cfg:       cfg,
+		searchEng: search.NewEngine(),
+		netEng:    netsearch.NewEngine(),
+		favStore:  favorites.LoadStore(cfg),
+		ssStore:   storedsearches.LoadStore(cfg),
 	}
 	a.fyneApp.SetIcon(assets.Icon())
 	a.fyneApp.Settings().SetTheme(nordTheme{})
@@ -49,10 +51,7 @@ func Run() {
 		if a.cancelSearch != nil {
 			a.cancelSearch()
 		}
-		if a.network.cancelSearch != nil {
-			a.network.cancelSearch()
-		}
-		a.network.engine.Mounts.UnmountAll(context.Background())
+		a.netEng.Mounts.UnmountAll(context.Background())
 		a.saveWindowGeometry()
 		a.cfg.Save()
 		a.win.Close()
