@@ -37,13 +37,28 @@ func (nordTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) colo
 		theme.ColorNameMenuBackground, theme.ColorNameOverlayBackground, theme.ColorNameHeaderBackground,
 		theme.ColorNameScrollBarBackground:
 		return nord1
-	case theme.ColorNameHover, theme.ColorNamePressed, theme.ColorNameSelection,
+	case theme.ColorNameHover, theme.ColorNamePressed,
 		theme.ColorNameInnerWindowBorder, theme.ColorNameInnerWindowBorderInactive, theme.ColorNameSeparator:
 		return nord2
 	case theme.ColorNameDisabled, theme.ColorNamePlaceHolder, theme.ColorNameInputBorder, theme.ColorNameScrollBar:
 		return nord3
-	case theme.ColorNamePrimary, theme.ColorNameFocus:
+	case theme.ColorNamePrimary:
 		return nord8
+	case theme.ColorNameFocus:
+		// Distinct from Primary (nord8): a Check widget's checked-icon and
+		// its focus ring both use Primary/Focus respectively, and with both
+		// the same saturated cyan, a just-clicked (and therefore focused)
+		// checked checkbox rendered as one solid-looking circle instead of
+		// a square checkbox with a subtle ring around it -- an unfocused
+		// checked box nearby then looked like a completely different
+		// widget rather than the same control in a different state.
+		return nord3
+	case theme.ColorNameSelection:
+		// Distinct from Hover (nord2): List/Tree selection and hover both
+		// used the same color, so paging through search results with
+		// Prev/Next -- which selects a row without the mouse ever
+		// hovering it -- produced no visually obvious "this one" cue.
+		return color.NRGBA{R: nord8.R, G: nord8.G, B: nord8.B, A: 0x50}
 	case theme.ColorNameHyperlink:
 		return nord9
 	case theme.ColorNameForegroundOnPrimary:

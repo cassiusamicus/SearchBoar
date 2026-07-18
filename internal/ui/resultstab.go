@@ -285,7 +285,22 @@ func (t *resultsTab) step(delta int) {
 
 // resort rebuilds the display order from t.app.searchResults, called both
 // when the sort field/direction changes and whenever a new result arrives.
+//
+// While a search is running, resort() runs once per incoming result, and
+// each call can shuffle every row's display position (e.g. sorting by
+// Number of Hits changes rank as later files bring in more matches than
+// the one currently previewed). t.selIdx is a display-order index, so
+// without tracking which underlying result it pointed to, a reshuffle
+// would leave the list's highlighted row correct (List.Refresh shows
+// whatever is now at that position) while the preview pane kept showing
+// the file that used to be there -- the highlight and the preview would
+// point at two different files.
 func (t *resultsTab) resort() {
+	selectedResult := -1
+	if t.selIdx >= 0 && t.selIdx < len(t.order) {
+		selectedResult = t.order[t.selIdx]
+	}
+
 	order := make([]int, len(t.app.searchResults))
 	for i := range order {
 		order[i] = i
@@ -322,10 +337,27 @@ func (t *resultsTab) resort() {
 		t.nextBtn.Disable()
 		t.openBtn.Disable()
 		t.actionsBtn.Disable()
-	} else if t.selIdx < 0 {
+		return
+	}
+
+	if selectedResult < 0 {
+		// Nothing was selected yet -- auto-select the first result.
 		t.renderPreview(0)
 		t.list.Select(0)
+		return
 	}
+
+	// Re-locate the previously-selected result's new display position so
+	// the highlighted row and the preview pane stay in agreement.
+	newIdx := 0
+	for i, resultIdx := range t.order {
+		if resultIdx == selectedResult {
+			newIdx = i
+			break
+		}
+	}
+	t.renderPreview(newIdx)
+	t.list.Select(newIdx)
 }
 
 func (t *resultsTab) addResult(model.FileResult) {
