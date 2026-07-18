@@ -46,21 +46,26 @@ func (t *startTab) build() fyne.CanvasObject {
 		t.commitQuickFields()
 		t.app.tabs.SelectIndex(tabIndexBuilder)
 	})
+	favoriteBtn := widget.NewButtonWithIcon("Save as Favorite Search", theme.HistoryIcon(), func() {
+		t.commitQuickFields()
+		t.app.favSearches.promptSaveCurrentSearch()
+	})
 	quickSearchCard := widget.NewCard("Quick Search", "", container.NewVBox(
 		container.NewBorder(nil, nil, widget.NewLabel("Files:"), nil, t.quickFileEntry),
 		container.NewBorder(nil, nil, widget.NewLabel("Containing:"), nil, t.quickContent),
-		container.NewHBox(searchNowBtn, openBuilderBtn),
+		container.NewHBox(searchNowBtn, openBuilderBtn, favoriteBtn),
 	))
 
 	t.locationLabel = widget.NewLabel("")
 	t.locationLabel.Wrapping = fyne.TextWrapWord
+	localOnlyBtn := widget.NewButton("Local Storage Only", func() { t.localOnly() })
 	browseBtn := widget.NewButton("Browse for a folder...", func() { t.quickBrowse() })
 	openLocationsBtn := widget.NewButton("Open Search Locations  →", func() {
 		t.app.tabs.SelectIndex(tabIndexLocations)
 	})
 	quickLocationCard := widget.NewCard("Quick Location", "", container.NewVBox(
 		t.locationLabel,
-		container.NewHBox(browseBtn, openLocationsBtn),
+		container.NewHBox(localOnlyBtn, browseBtn, openLocationsBtn),
 	))
 
 	t.resultsList = widget.NewList(
@@ -130,6 +135,16 @@ func (t *startTab) commitQuickFields() {
 func (t *startTab) searchNow() {
 	t.commitQuickFields()
 	t.app.startSearch()
+}
+
+// localOnly is a one-click shortcut for the common case: search local
+// drives only, skipping SMB/NFS network scanning entirely (and the
+// mount-authorization prompts that come with it).
+func (t *startTab) localOnly() {
+	t.app.locations.localCheck.SetChecked(true)
+	t.app.locations.smbCheck.SetChecked(false)
+	t.app.locations.nfsCheck.SetChecked(false)
+	t.locationLabel.SetText(t.locationSummary())
 }
 
 func (t *startTab) quickBrowse() {

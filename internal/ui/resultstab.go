@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 
 	"fyne.io/fyne/v2"
@@ -14,36 +15,76 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
 )
 
-// resultsTab is the unified "Results" tab: a single scrolling column of
-// self-contained cards (name, location/date/size, and a wrapped preview of
-// the first match with highlighting), one per matched file -- modeled
-// after epicorg's search results list rather than a file-table-plus-
-// separate-preview-pane split. A table+narrow-preview-column split was
-// tried first and abandoned: the preview column was too narrow to be
-// useful, and widget.TextGrid (used for the preview) cannot wrap text at
-// all, only truncate.
+// resultsTab is the "Results" tab: a file list on the left and a preview
+// of the selected file's matches on the right, with Prev/Next buttons to
+// step through every result without returning to the list each time.
+//
+// An earlier version used widget.TextGrid for the preview, which cannot
+// wrap text at all (only truncate), and a version after that replaced the
+// whole thing with a single scrolling column of cards -- but the list+
+// preview split is what was actually wanted, just fixed to use a wrapping
+// widget (RichText) for the preview instead of TextGrid.
 type resultsTab struct {
 	app *App
 
 	sortField string // "Name", "Location", "Modified", "Size"
 	sortAsc   bool
 	order     []int // display index -> app.searchResults index
+	selIdx    int   // display index currently shown in the preview, -1 if none
 
-	cardsBox   *fyne.Container
+	list       *widget.List
 	countLabel *widget.Label
+	stopBtn    *widget.Button
+
+	previewTitle *widget.RichText
+	previewMeta  *widget.Label
+	previewBody  *fyne.Container
+	prevBtn      *widget.Button
+	nextBtn      *widget.Button
+	openBtn      *widget.Button
+	actionsBtn   *widget.Button
 }
 
 func newResultsTab(a *App) *resultsTab {
-	return &resultsTab{app: a, sortField: "Name", sortAsc: true}
+	return &resultsTab{app: a, sortField: "Name", sortAsc: true, selIdx: -1}
 }
 
 func (t *resultsTab) build() fyne.CanvasObject {
-	// t.cardsBox/t.countLabel must exist before sortSelect.SetSelected
+	// countLabel/list/previewBody must exist before sortSelect.SetSelected
 	// below, since Select.SetSelected fires its OnChanged synchronously
-	// when the value actually changes, which calls resort() ->
-	// rebuildCards() -> both of these.
+	// when the value actually changes.
 	t.countLabel = widget.NewLabel("")
-	t.cardsBox = container.NewVBox()
+
+	// A plain widget.Label is used for list rows -- an earlier version used
+	// a custom tappableLabel (implementing its own Tapped) here so rows
+	// could be double-clicked/right-clicked, but a widget.List dispatches
+	// taps to the deepest Tappable under the pointer, so the row's own
+	// Tapped() handler intercepted every click before List's native
+	// selection logic ever ran, leaving the preview stuck on whatever was
+	// selected first no matter what row was clicked. Selection now goes
+	// through List.OnSelected (the well-tested native path); double-click
+	// and right-click-menu actions moved to the Open/Actions buttons in the
+	// preview pane instead of living on each row.
+	t.list = widget.NewList(
+		func() int { return len(t.order) },
+		func() fyne.CanvasObject { return widget.NewLabel("") },
+		func(id widget.ListItemID, o fyne.CanvasObject) { t.updateListRow(id, o.(*widget.Label)) },
+	)
+	t.list.OnSelected = func(id widget.ListItemID) { t.renderPreview(id) }
+
+	t.previewTitle = widget.NewRichTextWithText("Select a result to preview it")
+	t.previewMeta = widget.NewLabel("")
+	t.previewBody = container.NewVBox()
+
+	t.prevBtn = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() { t.step(-1) })
+	t.nextBtn = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() { t.step(1) })
+	t.openBtn = widget.NewButtonWithIcon("Open", theme.MediaPlayIcon(), func() { t.openSelected() })
+	t.actionsBtn = widget.NewButtonWithIcon("Actions", theme.MoreVerticalIcon(), nil)
+	t.actionsBtn.OnTapped = func() { t.showActionsMenu(t.actionsBtn) }
+	t.prevBtn.Disable()
+	t.nextBtn.Disable()
+	t.openBtn.Disable()
+	t.actionsBtn.Disable()
 
 	sortSelect := widget.NewSelect([]string{"Name", "Location", "Modified", "Size"}, func(v string) {
 		t.sortField = v
@@ -62,9 +103,64 @@ func (t *resultsTab) build() fyne.CanvasObject {
 		t.resort()
 	}
 
-	header := container.NewHBox(widget.NewLabel("Sort by:"), sortSelect, dirBtn, layout.NewSpacer(), t.countLabel)
+	t.stopBtn = widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), func() { t.app.stopSearch() })
+	t.stopBtn.Disable()
 
-	return container.NewBorder(header, nil, nil, nil, container.NewVScroll(t.cardsBox))
+	header := container.NewHBox(widget.NewLabel("Sort by:"), sortSelect, dirBtn, t.stopBtn, layout.NewSpacer(), t.countLabel)
+
+	previewPane := container.NewBorder(
+		container.NewVBox(t.previewTitle, t.previewMeta, container.NewHBox(t.prevBtn, t.nextBtn, t.openBtn, t.actionsBtn), widget.NewSeparator()),
+		nil, nil, nil,
+		container.NewVScroll(t.previewBody),
+	)
+
+	split := container.NewHSplit(t.list, previewPane)
+	split.Offset = 0.28
+
+	return container.NewBorder(header, nil, nil, nil, split)
+}
+
+func (t *resultsTab) updateListRow(id widget.ListItemID, l *widget.Label) {
+	if id >= len(t.order) {
+		l.SetText("")
+		return
+	}
+	res := t.app.searchResults[t.order[id]]
+	l.SetText(res.Name)
+}
+
+// selectedResult returns the result currently shown in the preview pane,
+// and whether one is actually selected.
+func (t *resultsTab) selectedResult() (model.FileResult, bool) {
+	if t.selIdx < 0 || t.selIdx >= len(t.order) {
+		return model.FileResult{}, false
+	}
+	return t.app.searchResults[t.order[t.selIdx]], true
+}
+
+func (t *resultsTab) openSelected() {
+	res, ok := t.selectedResult()
+	if !ok {
+		return
+	}
+	if err := t.app.openResult(res.Path); err != nil {
+		t.app.setStatus("Failed to open: " + err.Error())
+	}
+}
+
+// showActionsMenu opens the same open/open-with/show-in-file-manager/
+// copy-path/favorite/delete menu the list rows used to show on right-click,
+// anchored below the Actions button instead of a click position.
+func (t *resultsTab) showActionsMenu(anchor fyne.CanvasObject) {
+	res, ok := t.selectedResult()
+	if !ok {
+		return
+	}
+	rec := fileRecord{Path: res.Path, Name: res.Name, ModifiedStr: formatModTime(res.ModTime), Size: res.Size, SizeHuman: formatSize(res.Size)}
+	menu := t.app.fileContextMenu(rec, nil)
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(anchor)
+	pos = pos.Add(fyne.NewPos(0, anchor.Size().Height))
+	widget.ShowPopUpMenuAtPosition(menu, t.app.win.Canvas(), pos)
 }
 
 // displayPath prefers a result's network-style DisplayPath (for files
@@ -76,94 +172,99 @@ func displayPath(res model.FileResult) string {
 	return res.Path
 }
 
-func (t *resultsTab) buildCard(idx int) fyne.CanvasObject {
-	res := t.app.searchResults[idx]
-
-	title := widget.NewRichTextWithText(res.Name)
-	title.Segments[0].(*widget.TextSegment).Style = widget.RichTextStyleStrong
-
-	meta := widget.NewLabel(fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModTime(res.ModTime), formatSize(res.Size)))
-
-	objects := []fyne.CanvasObject{title, meta}
-	if len(res.Matches) > 0 {
-		preview := widget.NewRichText(t.previewSegments(res)...)
-		preview.Wrapping = fyne.TextWrapWord
-		objects = append(objects, preview)
+// renderPreview shows result displayIdx's details and every content
+// match in the preview pane; each context line is its own wrapping
+// RichText row so long lines reflow instead of forcing the pane wide.
+func (t *resultsTab) renderPreview(displayIdx int) {
+	if displayIdx < 0 || displayIdx >= len(t.order) {
+		return
 	}
-	objects = append(objects, widget.NewSeparator())
+	t.selIdx = displayIdx
+	res := t.app.searchResults[t.order[displayIdx]]
 
-	box := newTappableBox(container.NewVBox(objects...))
-	box.OnDoubleTapped = func() {
-		if err := t.app.openResult(res.Path); err != nil {
-			t.app.setStatus("Failed to open: " + err.Error())
+	t.previewTitle.Segments = []widget.RichTextSegment{&widget.TextSegment{Text: res.Name, Style: widget.RichTextStyleStrong}}
+	t.previewTitle.Refresh()
+	t.previewMeta.SetText(fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModTime(res.ModTime), formatSize(res.Size)))
+
+	re := t.app.currentContentRegex()
+	var blocks []fyne.CanvasObject
+	for i, m := range res.Matches {
+		if i > 0 {
+			blocks = append(blocks, widget.NewSeparator())
 		}
+		blocks = append(blocks, t.buildMatchBlock(m, re))
 	}
-	box.OnSecondaryTapped = func(e *fyne.PointEvent) {
-		rec := fileRecord{Path: res.Path, Name: res.Name, ModifiedStr: formatModTime(res.ModTime), Size: res.Size, SizeHuman: formatSize(res.Size)}
-		menu := t.app.fileContextMenu(rec, func() { t.resort() })
-		widget.ShowPopUpMenuAtPosition(menu, t.app.win.Canvas(), e.AbsolutePosition)
+	if len(res.Matches) == 0 {
+		blocks = append(blocks, widget.NewLabel("(filename match only -- no content preview)"))
 	}
-	return box
+	t.previewBody.Objects = blocks
+	t.previewBody.Refresh()
+
+	t.openBtn.Enable()
+	t.actionsBtn.Enable()
+	t.prevBtn.Enable()
+	t.nextBtn.Enable()
+	if displayIdx == 0 {
+		t.prevBtn.Disable()
+	}
+	if displayIdx == len(t.order)-1 {
+		t.nextBtn.Disable()
+	}
 }
 
-// previewSegments renders the first match's context lines as one wrapped,
-// highlighted snippet (consecutive lines joined with a space rather than
-// kept as separate hard-wrapped rows, so the card reflows naturally at any
-// window width), with a "+N more match(es)" note if there were others.
-func (t *resultsTab) previewSegments(res model.FileResult) []widget.RichTextSegment {
-	if len(res.Matches) == 0 {
-		return nil
-	}
-	m := res.Matches[0]
-	re := t.app.currentContentRegex()
-
-	segs := []widget.RichTextSegment{
-		&widget.TextSegment{Text: fmt.Sprintf("Line %d:  ", m.LineNum), Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder}},
-	}
-
-	for i, line := range m.ContextLines {
-		if i > 0 {
-			segs = append(segs, &widget.TextSegment{Text: "  ", Style: widget.RichTextStyleInline})
+func (t *resultsTab) buildMatchBlock(m model.ContentMatch, re *regexp.Regexp) fyne.CanvasObject {
+	var rows []fyne.CanvasObject
+	for li, line := range m.ContextLines {
+		lineNum := m.ContextStartLine + li
+		segs := []widget.RichTextSegment{
+			&widget.TextSegment{Text: fmt.Sprintf("%4d:  ", lineNum), Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder}},
 		}
-		if re == nil {
+		if re != nil && lineNum == m.LineNum {
+			segs = append(segs, highlightSegments(line, re)...)
+		} else {
 			segs = append(segs, &widget.TextSegment{Text: line, Style: widget.RichTextStyleInline})
-			continue
 		}
-		last := 0
-		for _, loc := range re.FindAllStringIndex(line, -1) {
-			if loc[0] > last {
-				segs = append(segs, &widget.TextSegment{Text: line[last:loc[0]], Style: widget.RichTextStyleInline})
-			}
-			segs = append(segs, &widget.TextSegment{
-				Text:  line[loc[0]:loc[1]],
-				Style: widget.RichTextStyle{Inline: true, TextStyle: fyne.TextStyle{Bold: true}, ColorName: theme.ColorNamePrimary},
-			})
-			last = loc[1]
-		}
-		if last < len(line) {
-			segs = append(segs, &widget.TextSegment{Text: line[last:], Style: widget.RichTextStyleInline})
-		}
+		rt := widget.NewRichText(segs...)
+		rt.Wrapping = fyne.TextWrapWord
+		rows = append(rows, rt)
 	}
+	return container.NewVBox(rows...)
+}
 
-	if len(res.Matches) > 1 {
+// highlightSegments splits line into plain/bold-highlighted runs around
+// every match of re.
+func highlightSegments(line string, re *regexp.Regexp) []widget.RichTextSegment {
+	var segs []widget.RichTextSegment
+	last := 0
+	for _, loc := range re.FindAllStringIndex(line, -1) {
+		if loc[0] > last {
+			segs = append(segs, &widget.TextSegment{Text: line[last:loc[0]], Style: widget.RichTextStyleInline})
+		}
 		segs = append(segs, &widget.TextSegment{
-			Text:  fmt.Sprintf("   (+%d more match%s)", len(res.Matches)-1, pluralS(len(res.Matches)-1)),
-			Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder},
+			Text:  line[loc[0]:loc[1]],
+			Style: widget.RichTextStyle{Inline: true, TextStyle: fyne.TextStyle{Bold: true}, ColorName: theme.ColorNamePrimary},
 		})
+		last = loc[1]
+	}
+	if last < len(line) {
+		segs = append(segs, &widget.TextSegment{Text: line[last:], Style: widget.RichTextStyleInline})
 	}
 	return segs
 }
 
-func pluralS(n int) string {
-	if n == 1 {
-		return ""
+// step moves the preview to the next/previous result (delta = ±1) and
+// keeps the list selection in sync.
+func (t *resultsTab) step(delta int) {
+	next := t.selIdx + delta
+	if next < 0 || next >= len(t.order) {
+		return
 	}
-	return "es"
+	t.renderPreview(next)
+	t.list.Select(next)
 }
 
-// resort rebuilds the display order and every card from t.app.searchResults,
-// called both when the sort field/direction changes and whenever a new
-// result arrives.
+// resort rebuilds the display order from t.app.searchResults, called both
+// when the sort field/direction changes and whenever a new result arrives.
 func (t *resultsTab) resort() {
 	order := make([]int, len(t.app.searchResults))
 	for i := range order {
@@ -190,17 +291,17 @@ func (t *resultsTab) resort() {
 	}
 	sort.SliceStable(order, less)
 	t.order = order
-	t.rebuildCards()
-}
-
-func (t *resultsTab) rebuildCards() {
-	objects := make([]fyne.CanvasObject, 0, len(t.order))
-	for _, idx := range t.order {
-		objects = append(objects, t.buildCard(idx))
-	}
-	t.cardsBox.Objects = objects
-	t.cardsBox.Refresh()
+	t.list.Refresh()
 	t.countLabel.SetText(fmt.Sprintf("%d result(s)", len(t.order)))
+
+	if len(t.order) == 0 {
+		t.selIdx = -1
+		t.prevBtn.Disable()
+		t.nextBtn.Disable()
+	} else if t.selIdx < 0 {
+		t.renderPreview(0)
+		t.list.Select(0)
+	}
 }
 
 func (t *resultsTab) addResult(model.FileResult) {
@@ -209,11 +310,35 @@ func (t *resultsTab) addResult(model.FileResult) {
 
 func (t *resultsTab) clear() {
 	t.order = nil
-	if t.cardsBox != nil {
-		t.cardsBox.Objects = nil
-		t.cardsBox.Refresh()
+	t.selIdx = -1
+	if t.list != nil {
+		t.list.UnselectAll()
+		t.list.Refresh()
 	}
 	if t.countLabel != nil {
 		t.countLabel.SetText("")
+	}
+	if t.previewTitle != nil {
+		t.previewTitle.Segments = []widget.RichTextSegment{&widget.TextSegment{Text: "Select a result to preview it", Style: widget.RichTextStyleInline}}
+		t.previewTitle.Refresh()
+	}
+	if t.previewMeta != nil {
+		t.previewMeta.SetText("")
+	}
+	if t.previewBody != nil {
+		t.previewBody.Objects = nil
+		t.previewBody.Refresh()
+	}
+	if t.prevBtn != nil {
+		t.prevBtn.Disable()
+	}
+	if t.nextBtn != nil {
+		t.nextBtn.Disable()
+	}
+	if t.openBtn != nil {
+		t.openBtn.Disable()
+	}
+	if t.actionsBtn != nil {
+		t.actionsBtn.Disable()
 	}
 }

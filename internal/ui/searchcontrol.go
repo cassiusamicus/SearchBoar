@@ -66,6 +66,7 @@ func (a *App) startSearch() {
 
 	a.searchButton.Disable()
 	a.stopButton.Enable()
+	a.results.stopBtn.Enable()
 	a.progressBar.Show()
 	a.progressBar.SetValue(0)
 	a.setStatus("Searching...")
@@ -79,15 +80,44 @@ func (a *App) startSearch() {
 	go a.runUnifiedSearch(ctx, base, locOpts)
 }
 
-// restoreLastSearch pre-fills the Search Builder's filename pattern and
-// pre-checks the Search Locations tree with whatever the most recently
-// completed search used, loaded from config -- so the Start tab isn't the
-// only place that remembers.
+// restoreLastSearch pre-fills the Search Builder's filename pattern,
+// pre-checks the Search Locations tree, and repopulates the Results tab
+// with whatever the most recently completed search found, all loaded from
+// config -- so "View All Results" from the Start tab's Recent Results
+// isn't empty on a fresh launch just because no search has run yet this
+// session. The persisted RecentResults have no match/content-preview text
+// (only path/size/date, to keep the on-disk footprint small), so restored
+// results show in the list with an empty preview until a new search runs.
 func (a *App) restoreLastSearch() {
 	if a.cfg.Recent.LastFilePattern != "" {
 		a.builder.fileEntry.SetText(a.cfg.Recent.LastFilePattern)
 	}
+	if len(a.cfg.Recent.ContentPatterns) > 0 {
+		a.builder.contentCombo.SetText(a.cfg.Recent.ContentPatterns[0])
+	}
 	a.locations.restoreCheckedPaths(a.cfg.Recent.Paths)
+
+	if len(a.cfg.RecentResults) > 0 {
+		a.searchResults = make([]model.FileResult, len(a.cfg.RecentResults))
+		for i, r := range a.cfg.RecentResults {
+			a.searchResults[i] = model.FileResult{
+				FileEntry: model.FileEntry{
+					Path:        r.Path,
+					Name:        filepath.Base(r.Path),
+					ModTime:     parseModTime(r.Modified),
+					Size:        r.SizeBytes,
+					DisplayPath: r.DisplayPath,
+				},
+			}
+		}
+		a.results.resort()
+	}
+
+	// The Start tab's own build() already ran a refresh() before this
+	// method had a chance to apply any of the above, so its quick
+	// fields/location summary would otherwise show stale pre-restore
+	// defaults until the user did something to trigger a redraw.
+	a.start.refresh()
 }
 
 func (a *App) stopSearch() {
@@ -190,6 +220,7 @@ func (a *App) finishSearch(err error, filePattern string, searchPaths []string) 
 	runOnUI(func() {
 		a.searchButton.Enable()
 		a.stopButton.Disable()
+		a.results.stopBtn.Disable()
 		a.progressBar.Hide()
 		a.cancelSearch = nil
 		if err != nil && err != context.Canceled {

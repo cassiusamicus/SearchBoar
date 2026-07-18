@@ -62,11 +62,13 @@ glob patterns, the way the original two apps worked.
   rest of the session (never written to disk). A sidebar has the
   Local/SMB/NFS master toggles, the network range, and a prominent
   Search button.
-- **Results tab**: a single scrolling column of cards, one per matched
-  file (local or network) — name, location/date/size, and a wrapped,
-  highlighted preview of the first match — sortable by Name/Location/
-  Modified/Size, with the usual open/open-with/show-in-file-manager/
-  copy-path/favorite/delete actions on each card.
+- **Results tab**: a file list on the left (sortable by Name/Location/
+  Modified/Size) and a preview of the selected file's matches on the
+  right — highlighted, wrapped context lines, Prev/Next buttons to step
+  through every result without returning to the list, and Open/Actions
+  buttons for the usual open/open-with/show-in-file-manager/copy-path/
+  favorite/delete actions. A Stop button on the tab itself cancels a
+  search mid-run.
 - **Favorite Results tab**: categorized favorites with add/rename/move/
   delete categories and reordering.
 - **Favorite Searches tab**: save/load/delete named filename/content

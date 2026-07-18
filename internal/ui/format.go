@@ -5,11 +5,24 @@ import (
 	"time"
 )
 
+const modTimeLayout = "2006-01-02 15:04:05"
+
 func formatModTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.Format("2006-01-02 15:04:05")
+	return t.Format(modTimeLayout)
+}
+
+// parseModTime is formatModTime's inverse; the zero time.Time is returned
+// (not an error) for blank/unparseable input, since callers treat a zero
+// ModTime as "unknown" rather than a fatal condition.
+func parseModTime(s string) time.Time {
+	t, err := time.Parse(modTimeLayout, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // formatSize renders a byte count as a human string ("48.1 KB"), matching
