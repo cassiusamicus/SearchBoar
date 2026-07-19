@@ -139,8 +139,18 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	// content; word-wrap alone doesn't help unbroken text like a path.
 	title := widget.NewRichText(&widget.TextSegment{Text: res.Name, Style: widget.RichTextStyleSubHeading})
 	title.Wrapping = fyne.TextWrapBreak
+	// Marked as secondary by size and slant, not by color: LowImportance
+	// (the default "de-emphasized" choice) renders in ColorNameDisabled,
+	// which in this theme is a mid-gray tuned to read as merely subtle
+	// against a *light* background, but against this card's dark
+	// background it's low-contrast enough to be hard to read outright, not
+	// just subtle. Regular foreground color stays legible in both modes;
+	// smaller + italic still reads clearly as "secondary, not the title or
+	// match text" without sacrificing that legibility.
 	meta := widget.NewLabel(fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModTime(res.ModTime), formatSize(res.Size)))
-	meta.Importance = widget.LowImportance
+	meta.Importance = widget.MediumImportance
+	meta.SizeName = theme.SizeNameCaptionText
+	meta.TextStyle = fyne.TextStyle{Italic: true}
 	meta.Wrapping = fyne.TextWrapBreak
 
 	openBtn := widget.NewButtonWithIcon("Open", theme.MediaPlayIcon(), func() {

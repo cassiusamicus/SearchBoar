@@ -153,7 +153,13 @@ type termRow struct {
 func newTermRow() *termRow {
 	termLabel := widget.NewLabel("")
 	statusLabel := widget.NewLabel("")
-	statusLabel.Importance = widget.LowImportance
+	// Marked as secondary by size and slant, not by color -- see
+	// resultsview.go's buildCard for why: ColorNameDisabled (the default
+	// LowImportance color) is too low-contrast against this theme's dark
+	// panels to read comfortably, not just "subtly de-emphasized".
+	statusLabel.Importance = widget.MediumImportance
+	statusLabel.SizeName = theme.SizeNameCaptionText
+	statusLabel.TextStyle = fyne.TextStyle{Italic: true}
 	reindexBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), nil)
 	reindexBtn.Importance = widget.LowImportance
 	removeBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), nil)
