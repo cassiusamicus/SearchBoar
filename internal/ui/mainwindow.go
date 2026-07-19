@@ -92,6 +92,11 @@ func (a *App) buildMainWindow() {
 	}
 
 	a.statusBar = widget.NewLabel("Ready")
+	// Status text often includes a full file path (search errors, "Deleted
+	// /a/very/long/path", etc.) -- without wrapping, one long status
+	// message is enough to force the whole window wider than the screen,
+	// the same root cause fixed in resultsview.go's result cards.
+	a.statusBar.Wrapping = fyne.TextWrapBreak
 	a.progressBar = widget.NewProgressBar()
 	a.progressBar.Hide()
 
@@ -138,11 +143,31 @@ func (a *App) toggleThemeMode() {
 	a.applyThemeChange()
 }
 
+// maxReasonableWindowWidth/Height cap the geometry restored from a
+// previous session. Fyne has no portable way to query the actual screen
+// size to size against, so this is a conservative "should fit on nearly
+// any real monitor" ceiling -- a backstop against a saved size that came
+// from a larger/different display, or (before the content-driven-width
+// fixes in resultsview.go/mainwindow.go) got inflated by a long path
+// forcing the window wider than intended and then saved back to config on
+// close, which would otherwise keep reopening too wide forever even after
+// the underlying cause was fixed.
+const (
+	maxReasonableWindowWidth  = 1600
+	maxReasonableWindowHeight = 1000
+)
+
 func (a *App) restoreWindowGeometry() {
 	w, h := a.cfg.Window.Width, a.cfg.Window.Height
 	if w <= 0 || h <= 0 {
 		a.win.Resize(defaultWindowSize())
 		return
+	}
+	if w > maxReasonableWindowWidth {
+		w = maxReasonableWindowWidth
+	}
+	if h > maxReasonableWindowHeight {
+		h = maxReasonableWindowHeight
 	}
 	a.win.Resize(fyne.NewSize(float32(w), float32(h)))
 	// Fyne's Window interface has no cross-platform way to set screen

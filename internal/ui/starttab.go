@@ -105,11 +105,20 @@ func (t *startTab) build() fyne.CanvasObject {
 
 	t.refresh()
 
-	// Two columns instead of one long stacked column: search/location
-	// controls and the result list on the left, result cards filling the
-	// right -- a single VBox left the whole right half of the window
-	// empty on anything wider than a narrow laptop screen.
-	return container.NewGridWithColumns(2, left, right)
+	// A resizable split (drag the divider) instead of a fixed 50/50 grid
+	// or one long stacked column, so the two halves' relative width is a
+	// user preference, not a fixed layout decision.
+	//
+	// HSplit's own MinSize is the *sum* of both children's widths, so
+	// without the HScroll wrapper below, any wide content on either side
+	// (a long path, an unusually wide button row) would add directly onto
+	// the window's minimum width instead of just scrolling -- the same
+	// root cause as the wrapping fixes in resultsview.go/mainwindow.go,
+	// worth guarding here too since it compounds two children's widths
+	// instead of one label's.
+	split := container.NewHSplit(left, right)
+	split.Offset = 0.4
+	return container.NewHScroll(split)
 }
 
 // refresh re-reads the quick fields and location summary from the

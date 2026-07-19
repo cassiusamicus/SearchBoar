@@ -122,10 +122,21 @@ func (b *searchBuilderTab) build() fyne.CanvasObject {
 	searchBtn.Importance = widget.HighImportance
 
 	// Options/Context Lines/File Size Filter are each just a short row of
-	// controls; stacked full-width (the previous layout) left most of each
-	// card empty on anything wider than a narrow window. Side by side, they
-	// use the width the tab already has.
-	optionsRowCards := container.NewGridWithColumns(3,
+	// controls, side by side rather than stacked full-width so they don't
+	// leave most of each card empty on anything wider than a narrow window.
+	//
+	// This was a GridWithColumns(3) originally, but Fyne's grid MinSize is
+	// (widest child's width * column count), not the sum of the children --
+	// with the Options card being the widest of the three (three checkbox
+	// labels), that forced this row's MinSize to 3x the Options card's width
+	// alone (measured at 1528px), which is what was actually behind the
+	// window opening far wider than the screen: AppTabs.MinSize() takes the
+	// max content MinSize across *every* tab, not just the visible one (see
+	// container/tabs.go's baseTabsRenderer.minSize), so this forced the
+	// whole window wide on every launch regardless of which tab was shown.
+	// HBox sums the three cards' natural widths instead of multiplying by
+	// the widest.
+	optionsRowCards := container.NewHBox(
 		widget.NewCard("Options", "", optionsRow),
 		contextCard,
 		sizeCard,
@@ -143,11 +154,19 @@ func (b *searchBuilderTab) build() fyne.CanvasObject {
 }
 
 func searchHelpContent() fyne.CanvasObject {
+	// Wrapped, not just for readability: Accordion.MinSize() adds its detail
+	// content's width into its own MinSize *even while the item is closed*
+	// (see accordion.go), and AppTabs.MinSize() takes the max content
+	// MinSize across *every* tab, not just the visible one -- so an
+	// unwrapped long line here (the regex recipes are the worst offender)
+	// was forcing the whole window wide on every launch, on every tab, even
+	// with this accordion collapsed and Search Builder never opened.
 	common := widget.NewLabel(
 		"Common Searches\n" +
 			"• epicurus → finds this word anywhere\n" +
 			"• fat and sleek → exact phrase (words together)\n" +
 			"• Case sensitive → matches capitalization exactly")
+	common.Wrapping = fyne.TextWrapWord
 	recipes := widget.NewLabel(
 		"Regex Recipes (optional)\n" +
 			"• fear|death → either word\n" +
@@ -157,6 +176,7 @@ func searchHelpContent() fyne.CanvasObject {
 			"• fear → partial match (inside other words too)\n" +
 			"• ^Epicurus → line begins with\n" +
 			"• pain$ → line ends with")
+	recipes.Wrapping = fyne.TextWrapWord
 	return container.NewHBox(common, widget.NewSeparator(), recipes)
 }
 

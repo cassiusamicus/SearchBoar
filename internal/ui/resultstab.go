@@ -88,7 +88,11 @@ func (t *resultsTab) build() fyne.CanvasObject {
 	split := container.NewHSplit(t.view.list, t.view.scroll)
 	split.Offset = 0.22
 
-	return container.NewBorder(header, nil, nil, nil, split)
+	// HSplit's own MinSize is the *sum* of both children's widths; wrapping
+	// in HScroll stops that from adding directly onto the window's minimum
+	// width (see the longer explanation in starttab.go, which has the same
+	// wrapper around its own split).
+	return container.NewBorder(header, nil, nil, nil, container.NewHScroll(split))
 }
 
 func (t *resultsTab) addResult(r model.FileResult) { t.view.addResult(r) }

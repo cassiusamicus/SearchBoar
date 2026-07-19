@@ -112,9 +112,20 @@ func displayPath(res model.FileResult) string {
 func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	res := v.app.searchResults[resultIdx]
 
+	// Both wrapped: a filename or (especially) a directory path has no
+	// guaranteed word-break points (paths use "/", which Fyne's word-wrap
+	// doesn't treat as breakable), so without wrapping either one can
+	// render as a single very long unbroken line -- and since Fyne sizes
+	// a window to fit its content's minimum size, one long path anywhere
+	// in the result list was enough to force the *whole window* wider
+	// than the screen. TextWrapBreak (breaks at any character, not just
+	// word boundaries) is what actually guarantees that regardless of
+	// content; word-wrap alone doesn't help unbroken text like a path.
 	title := widget.NewRichText(&widget.TextSegment{Text: res.Name, Style: widget.RichTextStyleSubHeading})
+	title.Wrapping = fyne.TextWrapBreak
 	meta := widget.NewLabel(fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModTime(res.ModTime), formatSize(res.Size)))
 	meta.Importance = widget.LowImportance
+	meta.Wrapping = fyne.TextWrapBreak
 
 	openBtn := widget.NewButtonWithIcon("Open", theme.MediaPlayIcon(), func() {
 		if err := v.app.openResult(res.Path); err != nil {
