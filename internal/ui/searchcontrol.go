@@ -2,10 +2,14 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
+	"sync"
 
+	"codeberg.org/cassiusamicus/Utilities/internal/cache"
 	"codeberg.org/cassiusamicus/Utilities/internal/fsutil"
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
 	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
@@ -65,20 +69,92 @@ func (a *App) startSearch() {
 	a.start.view.clear()
 	a.tabs.SelectIndex(tabIndexResults)
 
+	locOpts := a.locations.locationOptions()
+	base := a.searchOptionsTemplate()
+
+	// Show whatever's already indexed for this exact content pattern (via
+	// Common Search Terms) immediately, before the real search does
+	// anything -- ripgrep or otherwise. It's necessarily stale (indexed at
+	// some earlier point, maybe under different locations) so it's cleared
+	// the moment the live search actually produces its own first result or
+	// progress update (see clearCacheSeedOnce below); this is a preview to
+	// look at while the real search runs, not a replacement for it.
+	if n := a.seedFromCache(base); n > 0 {
+		a.setStatus(fmt.Sprintf("Showing %d cached result(s) for %q while searching...", n, strings.TrimSpace(base.ContentPattern)))
+	} else {
+		a.setStatus("Searching...")
+	}
+
 	a.searchButton.Disable()
 	a.stopButton.Enable()
 	a.results.stopBtn.Enable()
 	a.progressBar.Show()
 	a.progressBar.SetValue(0)
-	a.setStatus("Searching...")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancelSearch = cancel
 
-	locOpts := a.locations.locationOptions()
-	base := a.searchOptionsTemplate()
-
 	go a.runUnifiedSearch(ctx, base, locOpts)
+}
+
+// seedFromCache looks up opts.ContentPattern as an exact, already-indexed
+// Common Search Term (see internal/cache's term_matches table) and, if
+// found, immediately populates the results views with it -- filtered by
+// opts.FilePattern so a narrower current search doesn't show entries the
+// index run (which always covers every file) wouldn't have matched. Exclude
+// globs/size filters aren't re-applied here, unlike the real engine: this
+// is a best-effort instant preview, not required to be exactly what the
+// live search will find, and it's replaced by real results within moments
+// regardless (see clearCacheSeedOnce). Returns the number of results shown.
+func (a *App) seedFromCache(opts search.Options) int {
+	term := strings.TrimSpace(opts.ContentPattern)
+	if !opts.ContentEnabled || term == "" {
+		return 0
+	}
+	matches, err := a.cache.GetTermMatches(term)
+	if err != nil || len(matches) == 0 {
+		return 0
+	}
+	filenameRe, err := search.CompileRegex(opts.FilePattern, opts.CaseSensitive)
+	if err != nil {
+		return 0
+	}
+	results := groupTermMatches(matches, filenameRe)
+	for _, r := range results {
+		a.searchResults = append(a.searchResults, r)
+		a.results.addResult(r)
+		a.start.view.addResult(r)
+	}
+	a.results.resort()
+	a.start.view.resort()
+	return len(results)
+}
+
+// groupTermMatches turns the flattened (one row per match) storage shape
+// cache.GetTermMatches returns back into one model.FileResult per file,
+// keeping only files whose name matches filenameRe. Relies on
+// GetTermMatches' own "ORDER BY path, line_num" to make grouping a single
+// pass instead of needing a map.
+func groupTermMatches(matches []cache.TermMatch, filenameRe *regexp.Regexp) []model.FileResult {
+	var out []model.FileResult
+	for _, m := range matches {
+		name := filepath.Base(m.Path)
+		cm := model.ContentMatch{LineNum: m.LineNum, ContextStartLine: m.ContextStartLine, ContextLines: m.ContextLines}
+		if len(out) > 0 && out[len(out)-1].Path == m.Path {
+			out[len(out)-1].Matches = append(out[len(out)-1].Matches, cm)
+			continue
+		}
+		if filenameRe != nil && !filenameRe.MatchString(name) {
+			continue
+		}
+		out = append(out, model.FileResult{
+			FileEntry: model.FileEntry{
+				Path: m.Path, Name: name, ModTime: m.ModTime, Size: m.Size, DisplayPath: m.DisplayPath,
+			},
+			Matches: []model.ContentMatch{cm},
+		})
+	}
+	return out
 }
 
 // restoreLastSearch pre-fills the Search Builder's filename pattern,
@@ -142,14 +218,29 @@ func (a *App) runUnifiedSearch(ctx context.Context, base search.Options, locOpts
 		a.setStatus("[" + level + "] " + msg)
 	}
 
+	// The cache-seeded preview (see seedFromCache) is stale by definition --
+	// swap it out for the real thing the moment the live search actually
+	// produces its own first result, from whichever root gets there first,
+	// rather than leaving it up for the whole search or trying to merge the
+	// two (which risks duplicate entries for a file both find). Also passed
+	// to finishSearch so a live search that legitimately finds nothing
+	// still clears a stale preview instead of leaving it showing forever.
+	// sync.OnceFunc so it only fires once no matter which caller reaches it
+	// first.
+	clearCacheSeedOnce := sync.OnceFunc(func() {
+		a.searchResults = nil
+		a.results.clear()
+		a.start.view.clear()
+	})
+
 	roots, err := a.netEng.ResolveRoots(ctx, locOpts, logf)
 	if err != nil && ctx.Err() != nil {
-		a.finishSearch(ctx.Err(), base.FilePattern, locOpts.LocalRoots)
+		a.finishSearch(ctx.Err(), base.FilePattern, locOpts.LocalRoots, clearCacheSeedOnce)
 		return
 	}
 	if len(roots) == 0 {
 		a.setStatus("No search locations found")
-		a.finishSearch(nil, base.FilePattern, locOpts.LocalRoots)
+		a.finishSearch(nil, base.FilePattern, locOpts.LocalRoots, clearCacheSeedOnce)
 		return
 	}
 
@@ -166,7 +257,7 @@ func (a *App) runUnifiedSearch(ctx context.Context, base search.Options, locOpts
 			opts.ExcludeDirs = a.locations.excludeDirsFor(root.Path)
 		}
 
-		if err := a.runOneRoot(ctx, opts, root, i+1, len(roots)); err != nil {
+		if err := a.runOneRoot(ctx, opts, root, i+1, len(roots), clearCacheSeedOnce); err != nil {
 			if err == context.Canceled || ctx.Err() != nil {
 				searchErr = context.Canceled
 				break
@@ -175,10 +266,10 @@ func (a *App) runUnifiedSearch(ctx context.Context, base search.Options, locOpts
 		}
 	}
 
-	a.finishSearch(searchErr, base.FilePattern, locOpts.LocalRoots)
+	a.finishSearch(searchErr, base.FilePattern, locOpts.LocalRoots, clearCacheSeedOnce)
 }
 
-func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearch.ResolvedRoot, rootIndex, rootTotal int) error {
+func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearch.ResolvedRoot, rootIndex, rootTotal int, clearCacheSeedOnce func()) error {
 	results := make(chan model.FileResult)
 	progress := make(chan search.Progress)
 	done := make(chan error, 1)
@@ -199,6 +290,7 @@ func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearc
 				}
 			}
 			runOnUI(func() {
+				clearCacheSeedOnce()
 				a.searchResults = append(a.searchResults, r)
 				a.results.addResult(r)
 				a.start.view.addResult(r)
@@ -224,13 +316,22 @@ func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearc
 // reading a.searchResults here -- to update the status bar and record the
 // Start tab's history -- never races with the same-thread appends made
 // while results were streaming in.
-func (a *App) finishSearch(err error, filePattern string, searchPaths []string) {
+func (a *App) finishSearch(err error, filePattern string, searchPaths []string, clearCacheSeedOnce func()) {
 	runOnUI(func() {
 		a.searchButton.Enable()
 		a.stopButton.Disable()
 		a.results.stopBtn.Disable()
 		a.progressBar.Hide()
 		a.cancelSearch = nil
+		if err == nil {
+			// A search that ran to completion and found nothing proves the
+			// cache-seeded preview (if clearCacheSeedOnce hasn't already
+			// fired for a real result) is stale, so clear it rather than
+			// leaving it showing forever. A stopped or errored search never
+			// got to prove that either way, so it's left alone -- whatever
+			// was on screen (cached preview or partial live results) stays.
+			clearCacheSeedOnce()
+		}
 		// Results stream in during the search in arrival order (see
 		// addResult) rather than being fully re-sorted after every single
 		// one -- rebuilding every result card on every arrival would get

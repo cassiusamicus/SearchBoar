@@ -96,10 +96,19 @@ glob patterns, the way the original two apps worked.
   database; a refresh button on each term reindexes it later, e.g. after
   files change. Nothing is indexed proactively — this is not a background
   filesystem indexer, only an on-demand shortcut for terms you've told it
-  matter to you.
+  matter to you. A normal search (Search Builder or the Start tab) whose
+  content pattern exactly matches an indexed term shows that cached index
+  immediately — before ripgrep or anything else runs — then swaps in the
+  live results the moment the real search finds its own first match, so a
+  term you search often shows something instantly instead of waiting out
+  a full re-scan every time.
 - PDF and DOCX content extraction are built in (no external dependency
   required); `ripgrep` and `pdftotext` are optional speed/quality boosts,
   auto-detected with a per-distro install-command dialog if missing.
+  ripgrep can't see inside PDF/DOCX (it treats them as binary), so a
+  content search always follows a ripgrep run with a second, targeted pass
+  over just the PDF/DOCX files under the same search locations — no need
+  to restrict the file pattern to `.pdf`/`.docx` to have them searched.
 - A Nord-palette theme with a dark/light toggle (the sun/moon icon on the
   toolbar) and a user-configurable accent color (Settings dialog's
   Appearance tab, by hex code or a color picker) used for highlights,
@@ -123,10 +132,10 @@ cached until a file is actually searched — the cache only ever grows from
 searches you've run (including via the Common Search Terms tab), never a
 background index.
 
-This cache has no effect on a search ripgrep handles directly (ripgrep
-reads files itself and is already fast for plain-text search) — its
-benefit shows up for PDF/DOCX-heavy searches, systems without ripgrep
-installed, and repeat searches over slow storage like a network share. The
+This cache has no effect on the plain-text files ripgrep handles directly
+(ripgrep reads those itself and is already fast) — its benefit shows up
+for the PDF/DOCX supplement pass, systems without ripgrep installed, and
+repeat searches over slow storage like a network share. The
 Settings dialog (the toolbar's gear icon) shows the cache's current size
 and has a "Clear search cache" button, alongside custom "open with"
 program associations. Every toolbar icon has a hover tooltip; a plain-text

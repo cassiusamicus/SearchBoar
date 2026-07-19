@@ -78,13 +78,22 @@ func (e *Engine) Run(ctx context.Context, opts Options, results chan<- model.Fil
 	canUseRipgrep := e.RipgrepPath != "" &&
 		!opts.DisableRipgrep &&
 		contentRe != nil &&
-		opts.Recursive &&
-		!patternMentionsExt(opts.FilePattern, ".pdf") &&
-		!patternMentionsExt(opts.FilePattern, ".docx")
+		opts.Recursive
 
 	if canUseRipgrep {
 		if err := e.runRipgrep(ctx, opts, filenameRe, contentRe, results, progress); err == nil {
-			return nil
+			// rg treats PDF/DOCX as binary and never looks inside them, so a
+			// content search that used the ripgrep fast path silently missed
+			// any match living inside one -- previously "fixed" by refusing
+			// ripgrep entirely whenever the file pattern happened to mention
+			// ".pdf"/".docx" as a substring, which did nothing for the much
+			// more common case of a default/unrestricted pattern (".*") that
+			// legitimately matches PDF/DOCX filenames too. Instead, always
+			// follow a successful rg run with a real (filenameRe-filtered,
+			// cache-aware) walk over just the PDF/DOCX candidates: if the
+			// pattern wouldn't have matched such a file anyway, that walk
+			// simply finds nothing extra.
+			return e.runPDFDOCXSupplement(ctx, opts, filenameRe, contentRe, results, progress)
 		} else if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -94,6 +103,28 @@ func (e *Engine) Run(ctx context.Context, opts Options, results chan<- model.Fil
 	}
 
 	return e.runWalk(ctx, opts, filenameRe, contentRe, results, progress)
+}
+
+// runPDFDOCXSupplement finds PDF/DOCX files ripgrep couldn't see inside and
+// content-matches just those through the normal cache-aware extraction
+// path. See the comment in Run for why this always runs after a successful
+// ripgrep pass rather than being gated on the file pattern.
+func (e *Engine) runPDFDOCXSupplement(ctx context.Context, opts Options, filenameRe, contentRe *regexp.Regexp, results chan<- model.FileResult, progress chan<- Progress) error {
+	candidates, err := collectCandidates(ctx, opts, filenameRe)
+	if err != nil {
+		return err
+	}
+	pdfDocx := candidates[:0]
+	for _, c := range candidates {
+		switch strings.ToLower(filepath.Ext(c.path)) {
+		case ".pdf", ".docx":
+			pdfDocx = append(pdfDocx, c)
+		}
+	}
+	if len(pdfDocx) == 0 {
+		return nil
+	}
+	return e.runCandidates(ctx, pdfDocx, opts, contentRe, results, progress)
 }
 
 // CompileRegex is the exported form of the engine's own pattern compilation
@@ -113,18 +144,19 @@ func compileRegex(pattern string, caseSensitive bool) (*regexp.Regexp, error) {
 	return regexp.Compile(pattern)
 }
 
-// patternMentionsExt is a heuristic substring check (not real regex
-// analysis) used only to decide whether ripgrep should be bypassed in favor
-// of the PDF/DOCX-aware walk path, exactly as the original app did.
-func patternMentionsExt(pattern, ext string) bool {
-	return strings.Contains(strings.ToLower(pattern), strings.ToLower(ext))
-}
-
 func (e *Engine) runWalk(ctx context.Context, opts Options, filenameRe, contentRe *regexp.Regexp, results chan<- model.FileResult, progress chan<- Progress) error {
 	candidates, err := collectCandidates(ctx, opts, filenameRe)
 	if err != nil {
 		return err
 	}
+	return e.runCandidates(ctx, candidates, opts, contentRe, results, progress)
+}
+
+// runCandidates content-matches candidates through the worker pool -- the
+// shared second half of runWalk, also used by Run's PDF/DOCX supplementary
+// pass after a successful ripgrep run (see Run) so both share the same
+// cache-aware extraction and progress reporting instead of duplicating it.
+func (e *Engine) runCandidates(ctx context.Context, candidates []candidate, opts Options, contentRe *regexp.Regexp, results chan<- model.FileResult, progress chan<- Progress) error {
 	total := len(candidates)
 
 	numWorkers := e.MaxWorkers
@@ -210,14 +242,14 @@ func (e *Engine) searchFile(ctx context.Context, c candidate, opts Options, cont
 	case ".docx":
 		extract = func() (string, error) { return extractDOCXText(c.path) }
 	default:
-		isBin, err := isBinaryFile(c.path)
+		isBin, err := withIOTimeout(ctx, func() (bool, error) { return isBinaryFile(c.path) })
 		if err != nil || isBin {
 			return res, false
 		}
 		extract = func() (string, error) { return readText(c.path) }
 	}
 
-	text, err := e.extractText(c, extract)
+	text, err := e.extractText(ctx, c, extract)
 	if err != nil {
 		return res, false
 	}
@@ -228,12 +260,13 @@ func (e *Engine) searchFile(ctx context.Context, c candidate, opts Options, cont
 
 // extractText returns c's text content, from the cache if a fresh entry
 // exists (same path, mtime, and size), otherwise via extract -- which it
-// then stores for next time.
-func (e *Engine) extractText(c candidate, extract func() (string, error)) (string, error) {
+// then stores for next time. extract runs under withIOTimeout since it's
+// always a blocking filesystem call (plain read, PDF/DOCX extraction).
+func (e *Engine) extractText(ctx context.Context, c candidate, extract func() (string, error)) (string, error) {
 	if text, ok := e.Cache.GetText(c.path, c.info.ModTime(), c.info.Size()); ok {
 		return text, nil
 	}
-	text, err := extract()
+	text, err := withIOTimeout(ctx, extract)
 	if err != nil {
 		return "", err
 	}

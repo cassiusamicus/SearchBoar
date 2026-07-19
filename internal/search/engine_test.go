@@ -198,6 +198,47 @@ func TestContentSearchRipgrepMatchesWalkFallback(t *testing.T) {
 	}
 }
 
+// TestRipgrepFindsDOCXContentViaSupplement guards against a real regression:
+// ripgrep treats DOCX (and PDF) as binary and never looks inside them, so a
+// content search that takes the ripgrep fast path used to silently miss
+// matches living inside one -- and the previous fix (skip ripgrep entirely
+// whenever the file pattern happened to mention ".docx"/".pdf" as a
+// substring) did nothing for the common case of an unrestricted pattern
+// like ".*" that legitimately matches such files too. Run's PDF/DOCX
+// supplement pass (see runPDFDOCXSupplement) exists to close that gap.
+func TestRipgrepFindsDOCXContentViaSupplement(t *testing.T) {
+	if _, err := exec.LookPath("rg"); err != nil {
+		t.Skip("ripgrep not installed")
+	}
+	dir := t.TempDir()
+	buildTree(t, dir)
+
+	e := NewEngine()
+	if e.RipgrepPath == "" {
+		t.Fatal("NewEngine did not detect rg even though exec.LookPath found it")
+	}
+	got := runCollect(t, e, Options{
+		Dir:            dir,
+		FilePattern:    ".*", // unrestricted -- matches notes.docx by name too
+		ContentEnabled: true,
+		ContentPattern: "target",
+		Recursive:      true,
+	})
+
+	var foundDocx bool
+	for _, r := range got {
+		if r.Name == "notes.docx" {
+			foundDocx = true
+			if len(r.Matches) != 1 {
+				t.Errorf("notes.docx: got %d matches, want 1", len(r.Matches))
+			}
+		}
+	}
+	if !foundDocx {
+		t.Errorf("notes.docx not found via ripgrep + PDF/DOCX supplement; got results: %v", names(got))
+	}
+}
+
 func TestExcludeGlobs(t *testing.T) {
 	dir := t.TempDir()
 	buildTree(t, dir)

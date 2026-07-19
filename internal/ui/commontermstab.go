@@ -175,10 +175,21 @@ func (r *termRow) CreateRenderer() fyne.WidgetRenderer {
 // (see search.Options.DisableRipgrep) -- ripgrep would be faster for this
 // one run, but it reads files itself and bypasses Engine.Cache entirely, so
 // using it here would defeat the point of building an index.
+//
+// Wired to the same a.cancelSearch/Stop-button machinery a regular search
+// uses (see startSearch/stopSearch in searchcontrol.go): this used to run
+// under context.Background() with no way to interrupt it at all, so a
+// single stalled file (e.g. a degraded network mount) meant the only way
+// out was killing the whole app. Starting a reindex also cancels any
+// search or reindex already in flight, matching startSearch's own
+// one-operation-at-a-time behavior.
 func (a *App) reindexTerm(term string) {
 	if !a.locations.anyLocationSelected() {
 		a.setStatus("No search location selected -- can't index \"" + term + "\" (see Search Locations tab)")
 		return
+	}
+	if a.cancelSearch != nil {
+		a.cancelSearch()
 	}
 	locOpts := a.locations.locationOptions()
 	base := search.Options{
@@ -190,15 +201,28 @@ func (a *App) reindexTerm(term string) {
 	}
 
 	a.commonTerms.setIndexing(term, true)
+	a.stopButton.Enable()
+	a.results.stopBtn.Enable()
 	a.setStatus("Indexing \"" + term + "\"...")
 
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancelSearch = cancel
+
 	go func() {
-		ctx := context.Background()
+		defer runOnUI(func() {
+			a.stopButton.Disable()
+			a.results.stopBtn.Disable()
+			a.cancelSearch = nil
+		})
+
 		var matches []cache.TermMatch
 
 		roots, err := a.netEng.ResolveRoots(ctx, locOpts, func(level, msg string) {})
 		if err == nil {
 			for _, root := range roots {
+				if ctx.Err() != nil {
+					break
+				}
 				opts := base
 				opts.Dir = root.Path
 				if root.DisplayPrefix == "" {
@@ -206,6 +230,14 @@ func (a *App) reindexTerm(term string) {
 				}
 				matches = append(matches, collectTermMatches(ctx, a.searchEng, opts, root)...)
 			}
+		}
+
+		if ctx.Err() != nil {
+			runOnUI(func() {
+				a.commonTerms.setIndexing(term, false)
+				a.setStatus("Indexing \"" + term + "\" stopped")
+			})
+			return
 		}
 
 		if serr := a.cache.SaveTermMatches(term, matches); serr != nil {
