@@ -85,9 +85,9 @@ func (a *App) startSearch() {
 // with whatever the most recently completed search found, all loaded from
 // config -- so "View All Results" from the Start tab's Recent Results
 // isn't empty on a fresh launch just because no search has run yet this
-// session. The persisted RecentResults have no match/content-preview text
-// (only path/size/date, to keep the on-disk footprint small), so restored
-// results show in the list with an empty preview until a new search runs.
+// session. RecentResults persists match content too (see
+// config.RecentResult), so a restored result shows the same highlighted
+// context a fresh search would, not just its path/size/date.
 func (a *App) restoreLastSearch() {
 	if a.cfg.Recent.LastFilePattern != "" {
 		a.builder.fileEntry.SetText(a.cfg.Recent.LastFilePattern)
@@ -100,6 +100,10 @@ func (a *App) restoreLastSearch() {
 	if len(a.cfg.RecentResults) > 0 {
 		a.searchResults = make([]model.FileResult, len(a.cfg.RecentResults))
 		for i, r := range a.cfg.RecentResults {
+			matches := make([]model.ContentMatch, len(r.Matches))
+			for j, m := range r.Matches {
+				matches[j] = model.ContentMatch{LineNum: m.LineNum, ContextStartLine: m.ContextStartLine, ContextLines: m.ContextLines}
+			}
 			a.searchResults[i] = model.FileResult{
 				FileEntry: model.FileEntry{
 					Path:        r.Path,
@@ -108,6 +112,7 @@ func (a *App) restoreLastSearch() {
 					Size:        r.SizeBytes,
 					DisplayPath: r.DisplayPath,
 				},
+				Matches: matches,
 			}
 		}
 		a.results.resort()
@@ -238,7 +243,11 @@ func (a *App) finishSearch(err error, filePattern string, searchPaths []string) 
 
 		recent := make([]recentResultSource, len(a.searchResults))
 		for i, r := range a.searchResults {
-			recent[i] = recentResultSource{Path: r.Path, DisplayPath: r.DisplayPath, Modified: formatModTime(r.ModTime), Size: r.Size}
+			matches := make([]recentMatchSource, len(r.Matches))
+			for j, m := range r.Matches {
+				matches[j] = recentMatchSource{LineNum: m.LineNum, ContextStartLine: m.ContextStartLine, ContextLines: m.ContextLines}
+			}
+			recent[i] = recentResultSource{Path: r.Path, DisplayPath: r.DisplayPath, Modified: formatModTime(r.ModTime), Size: r.Size, Matches: matches}
 		}
 		a.start.recordSearch(filePattern, searchPaths, recent)
 	})

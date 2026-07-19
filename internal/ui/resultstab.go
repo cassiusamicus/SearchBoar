@@ -17,18 +17,23 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/internal/model"
 )
 
-// resultsTab is the "Detailed Results" tab: every result shown as a card
-// (filename, path/date/size, every content match highlighted and wrapped)
-// stacked in one scrolling column, closest to epicorg's results view. A
-// Prev/Next pair in the header pages through every card -- scrolling the
-// next/previous one into view and highlighting it -- without requiring a
-// click on anything; the buttons live in the header, above the whole list,
-// since they page through every result found, not through matches inside
-// one file.
+// resultsTab is the "Detailed Results" tab: a compact filename list on the
+// left for quick navigation/overview, and every result rendered as a full
+// card (filename, path/date/size, every content match highlighted and
+// wrapped) stacked in one scrolling column on the right -- closest to
+// epicorg's results view, but keeping the list as a second, quicker way to
+// jump to a specific result instead of only scrolling. A Prev/Next pair in
+// the header pages through every card -- scrolling the next/previous one
+// into view and highlighting it (and syncing the list's own selection) --
+// without requiring a click on anything; the buttons live in the header,
+// above the list, since they page through every result found, not through
+// matches inside one file.
 //
 // Earlier versions used widget.TextGrid (can't wrap text at all), then a
-// list-on-the-left/preview-on-the-right split (which needed a click per
-// result to see its content) -- this is the third iteration.
+// list-on-the-left/preview-on-the-right split where the right side only
+// ever showed the one selected result, then briefly a cards-only layout
+// with no list at all (dropping a feature that was still wanted) -- this
+// combines the list and the cards.
 type resultsTab struct {
 	app *App
 
@@ -42,6 +47,7 @@ type resultsTab struct {
 	prevBtn    *widget.Button
 	nextBtn    *widget.Button
 
+	list     *widget.List
 	scroll   *container.Scroll
 	cardsBox *fyne.Container
 	cards    []*resultCard // parallel to t.order
@@ -63,12 +69,29 @@ func newResultsTab(a *App) *resultsTab {
 }
 
 func (t *resultsTab) build() fyne.CanvasObject {
-	// countLabel/cardsBox/scroll must exist before sortSelect.SetSelected
+	// countLabel/cardsBox/scroll/list must exist before sortSelect.SetSelected
 	// below, since Select.SetSelected fires its OnChanged synchronously
 	// when the value actually differs from "".
 	t.countLabel = widget.NewLabel("")
 	t.cardsBox = container.NewVBox()
 	t.scroll = container.NewVScroll(t.cardsBox)
+
+	// A plain widget.Label is used for list rows -- a custom Tappable
+	// wrapper here previously intercepted every click before List's own
+	// selection logic ran (Fyne dispatches taps to the deepest Tappable
+	// under the pointer), leaving clicks not doing anything. Selection now
+	// goes through List.OnSelected, the well-tested native path.
+	t.list = widget.NewList(
+		func() int { return len(t.order) },
+		func() fyne.CanvasObject { return widget.NewLabel("") },
+		func(id widget.ListItemID, o fyne.CanvasObject) { t.updateListRow(id, o.(*widget.Label)) },
+	)
+	t.list.OnSelected = func(id widget.ListItemID) {
+		t.selIdx = id
+		t.updateHighlight()
+		t.scrollToCurrent()
+		t.updateNavButtons()
+	}
 
 	t.prevBtn = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() { t.step(-1) })
 	t.nextBtn = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() { t.step(1) })
@@ -112,7 +135,18 @@ func (t *resultsTab) build() fyne.CanvasObject {
 		t.countLabel,
 	)
 
-	return container.NewBorder(header, nil, nil, nil, t.scroll)
+	split := container.NewHSplit(t.list, t.scroll)
+	split.Offset = 0.22
+
+	return container.NewBorder(header, nil, nil, nil, split)
+}
+
+func (t *resultsTab) updateListRow(id widget.ListItemID, l *widget.Label) {
+	if id >= len(t.order) {
+		l.SetText("")
+		return
+	}
+	l.SetText(t.app.searchResults[t.order[id]].Name)
 }
 
 // displayPath prefers a result's network-style DisplayPath (for files
@@ -224,6 +258,7 @@ func (t *resultsTab) step(delta int) {
 	t.updateHighlight()
 	t.scrollToCurrent()
 	t.updateNavButtons()
+	t.list.Select(next)
 }
 
 // selectionColor is the theme's selection color, used to highlight the
@@ -331,6 +366,7 @@ func (t *resultsTab) resort() {
 	sort.SliceStable(order, less)
 	t.order = order
 	t.rebuildCards()
+	t.list.Refresh()
 	t.countLabel.SetText(fmt.Sprintf("%d result(s)", len(t.order)))
 
 	if len(t.order) == 0 {
@@ -352,6 +388,7 @@ func (t *resultsTab) resort() {
 	t.updateHighlight()
 	t.scrollToCurrent()
 	t.updateNavButtons()
+	t.list.Select(newIdx)
 }
 
 func (t *resultsTab) rebuildCards() {
@@ -382,6 +419,7 @@ func (t *resultsTab) addResult(model.FileResult) {
 	}
 	t.cardsBox.Objects = append(t.cardsBox.Objects, card.root)
 	t.cardsBox.Refresh()
+	t.list.Refresh()
 
 	t.countLabel.SetText(fmt.Sprintf("%d result(s)", len(t.order)))
 
@@ -399,6 +437,10 @@ func (t *resultsTab) clear() {
 	if t.cardsBox != nil {
 		t.cardsBox.Objects = nil
 		t.cardsBox.Refresh()
+	}
+	if t.list != nil {
+		t.list.UnselectAll()
+		t.list.Refresh()
 	}
 	if t.countLabel != nil {
 		t.countLabel.SetText("")

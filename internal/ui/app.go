@@ -39,6 +39,8 @@ func Run() {
 		searchEng.Cache = resultCache
 	}
 
+	appTheme := newNordTheme(cfg.AccentColor, cfg.ThemeMode != "light")
+
 	a := &App{
 		fyneApp:   app.NewWithID("com.epicureanfriends.searchboar"),
 		cfg:       cfg,
@@ -48,9 +50,10 @@ func Run() {
 		ssStore:   storedsearches.LoadStore(cfg),
 		wsStore:   workspaces.LoadStore(cfg),
 		cache:     resultCache,
+		theme:     appTheme,
 	}
 	a.fyneApp.SetIcon(assets.Icon())
-	a.fyneApp.Settings().SetTheme(nordTheme{})
+	a.fyneApp.Settings().SetTheme(appTheme)
 
 	a.win = a.fyneApp.NewWindow("SearchBoar")
 	a.win.SetIcon(assets.Icon())

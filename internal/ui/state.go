@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
@@ -36,13 +37,16 @@ type App struct {
 	ssStore   *storedsearches.Store
 	wsStore   *workspaces.Store
 	cache     *cache.Cache // also referenced (nil-safe) via searchEng.Cache; kept here too for the Settings dialog's cache stats/clear button
+	theme     *nordTheme
 
 	tabs        *container.AppTabs
+	toolbarBg   *canvas.Rectangle // toolbar background, kept in sync with theme.accent
 	statusBar   *widget.Label
 	progressBar *widget.ProgressBar
 
 	searchButton *iconTipButton
 	stopButton   *iconTipButton
+	themeToggle  *iconTipButton
 
 	cancelSearch context.CancelFunc
 

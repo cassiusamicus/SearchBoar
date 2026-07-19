@@ -240,8 +240,13 @@ func (t *startTab) recordSearch(filePattern string, searchPaths []string, result
 		if i >= config.MaxRecentResults {
 			break
 		}
+		matches := make([]config.RecentMatch, len(r.Matches))
+		for j, m := range r.Matches {
+			matches[j] = config.RecentMatch{LineNum: m.LineNum, ContextStartLine: m.ContextStartLine, ContextLines: m.ContextLines}
+		}
 		recent = append(recent, config.RecentResult{
 			Path: r.Path, DisplayPath: r.DisplayPath, Modified: r.Modified, SizeBytes: r.Size, SizeHuman: formatSize(r.Size),
+			Matches: matches,
 		})
 	}
 	t.app.cfg.RecentResults = recent
@@ -252,10 +257,19 @@ func (t *startTab) recordSearch(filePattern string, searchPaths []string, result
 
 // recentResultSource is the minimal shape searchcontrol.go needs to hand
 // off to recordSearch without importing the ui package's model dependency
-// twice over.
+// twice over. Matches is carried through too (not just path/size/date) so
+// a restored result on a future launch still shows real match context
+// instead of an unexplained "no content preview" -- see model.ContentMatch.
 type recentResultSource struct {
 	Path        string
 	DisplayPath string
 	Modified    string
 	Size        int64
+	Matches     []recentMatchSource
+}
+
+type recentMatchSource struct {
+	LineNum          int
+	ContextStartLine int
+	ContextLines     []string
 }

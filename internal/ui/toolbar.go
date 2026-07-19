@@ -25,6 +25,14 @@ func (a *App) buildToolbar() *widget.Toolbar {
 	a.stopButton = newIconTipButton(theme.MediaStopIcon(), "Stop the current search", a.win, func() { a.stopSearch() })
 	a.stopButton.Disable()
 
+	// The icon shown is the mode a click switches *to* -- a sun while dark
+	// (tap for daylight), a moon while light (tap for night) -- the
+	// convention most apps with a dark/light toggle use.
+	a.themeToggle = newIconTipButton(themeToggleIcon(a.theme.dark), themeToggleTip(a.theme.dark), a.win, func() {
+		a.toggleThemeMode()
+		a.themeToggle.SetIcon(themeToggleIcon(a.theme.dark), themeToggleTip(a.theme.dark))
+	})
+
 	// A stretchable spacer keeps the wordmark and the icon group apart
 	// instead of crowding them together, and every icon gets a hover
 	// tooltip (see icontip.go -- Fyne has no built-in tooltip widget) since
@@ -38,10 +46,25 @@ func (a *App) buildToolbar() *widget.Toolbar {
 		toolbarWidgetItem{obj: a.stopButton},
 		toolbarWidgetItem{obj: newIconTipButton(theme.DocumentIcon(), "Favorite Searches", a.win, func() { a.tabs.SelectIndex(tabIndexFavSearches) })},
 		toolbarWidgetItem{obj: newIconTipButton(theme.ListIcon(), "Favorite Results", a.win, func() { a.tabs.SelectIndex(tabIndexFavorites) })},
+		toolbarWidgetItem{obj: a.themeToggle},
 		toolbarWidgetItem{obj: newIconTipButton(theme.SettingsIcon(), "Settings", a.win, func() { a.showSettingsDialog() })},
 		toolbarWidgetItem{obj: newIconTipButton(theme.HelpIcon(), "About SearchBoar", a.win, func() { a.showAboutDialog() })},
 	)
 	return t
+}
+
+func themeToggleIcon(dark bool) fyne.Resource {
+	if dark {
+		return sunIcon()
+	}
+	return moonIcon()
+}
+
+func themeToggleTip(dark bool) string {
+	if dark {
+		return "Switch to light mode"
+	}
+	return "Switch to dark mode"
 }
 
 func (a *App) showAboutDialog() {

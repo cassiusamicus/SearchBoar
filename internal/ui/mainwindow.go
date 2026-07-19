@@ -95,13 +95,45 @@ func (a *App) buildMainWindow() {
 
 	toolbar := a.buildToolbar()
 
+	// A colored strip behind the toolbar, tied to the same accent color as
+	// highlights/selection elsewhere (Settings dialog's Appearance tab) --
+	// applyThemeChange keeps this rectangle's fill in sync whenever the
+	// accent changes.
+	a.toolbarBg = canvas.NewRectangle(a.theme.accent)
+	toolbarRow := container.NewStack(a.toolbarBg, toolbar)
+
 	content := container.NewBorder(
-		toolbar,
+		toolbarRow,
 		container.NewVBox(a.progressBar, a.statusBar),
 		nil, nil,
 		a.tabs,
 	)
 	a.win.SetContent(content)
+}
+
+// applyThemeChange persists the theme's current accent color and dark/light
+// mode, re-applies the theme (Fyne re-queries every widget's colors when
+// the same theme instance is re-set, so this takes effect immediately
+// without a restart), and keeps the toolbar background rectangle in sync.
+// Called after any change to a.theme's accent or dark/light mode.
+func (a *App) applyThemeChange() {
+	a.cfg.AccentColor = a.theme.AccentHex()
+	if a.theme.dark {
+		a.cfg.ThemeMode = ""
+	} else {
+		a.cfg.ThemeMode = "light"
+	}
+	a.cfg.Save()
+	a.toolbarBg.FillColor = a.theme.accent
+	a.toolbarBg.Refresh()
+	a.fyneApp.Settings().SetTheme(a.theme)
+}
+
+// toggleThemeMode flips between dark and light mode -- the toolbar's
+// sun/moon icon's action (see toolbar.go).
+func (a *App) toggleThemeMode() {
+	a.theme.dark = !a.theme.dark
+	a.applyThemeChange()
 }
 
 func (a *App) restoreWindowGeometry() {

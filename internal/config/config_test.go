@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -169,6 +170,99 @@ func TestRecentResultsAndLastFilePatternRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(reloaded.RecentResults, cfg.RecentResults) {
 		t.Errorf("RecentResults = %+v, want %+v", reloaded.RecentResults, cfg.RecentResults)
+	}
+}
+
+func TestRecentResultsMatchesRoundTrip(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	cfg.RecentResults = []RecentResult{
+		{
+			Path: "/a.go", Modified: "2026-01-01 00:00:00", SizeBytes: 100, SizeHuman: "100 B",
+			Matches: []RecentMatch{
+				{LineNum: 5, ContextStartLine: 3, ContextLines: []string{"func Foo() {", "    x := 1", "    return x"}},
+				{LineNum: 12, ContextStartLine: 12, ContextLines: []string{"// TODO: fix this | with a pipe in it"}},
+			},
+		},
+		{Path: "/b.go", Modified: "2026-01-02 00:00:00", SizeBytes: 200, SizeHuman: "200 B"}, // no matches at all
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(reloaded.RecentResults, cfg.RecentResults) {
+		t.Errorf("RecentResults = %+v, want %+v", reloaded.RecentResults, cfg.RecentResults)
+	}
+}
+
+func TestRecentResultsWithoutMatchesFieldStillLoads(t *testing.T) {
+	// Simulates a config.ini written before Matches existed: only 5
+	// pipe-delimited fields, no trailing Matches blob.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.ini")
+	if err := os.WriteFile(path, []byte("[RecentResults]\n0 = /a.go||2026-01-01 00:00:00|100|100 B\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.RecentResults) != 1 {
+		t.Fatalf("expected 1 recent result, got %d", len(cfg.RecentResults))
+	}
+	r := cfg.RecentResults[0]
+	if r.Path != "/a.go" || r.SizeBytes != 100 || r.Matches != nil {
+		t.Errorf("RecentResults[0] = %+v, unexpected", r)
+	}
+}
+
+func TestThemeModeRoundTrip(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	cfg.ThemeMode = "light"
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.ThemeMode != "light" {
+		t.Errorf("ThemeMode = %q, want %q", reloaded.ThemeMode, "light")
+	}
+}
+
+func TestAccentColorRoundTrip(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	cfg.AccentColor = "#FF8800"
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.AccentColor != "#FF8800" {
+		t.Errorf("AccentColor = %q, want %q", reloaded.AccentColor, "#FF8800")
+	}
+}
+
+func TestAccentColorEmptyIsOmitted(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.AccentColor != "" {
+		t.Errorf("AccentColor = %q, want empty", reloaded.AccentColor)
 	}
 }
 

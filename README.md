@@ -70,15 +70,19 @@ glob patterns, the way the original two apps worked.
   the Search Locations tab's Workspaces card. A matching quick-select
   dropdown on the Start tab applies a saved workspace in one click without
   a trip to the full tab.
-- **Detailed Results tab**: every result as a card in one scrolling column
-  (sortable by Number of Hits/Name/Location/Modified/Size — Number of
-  Hits, most first, is the default) — filename, path/date/size, and every
-  content match highlighted and wrapped, all visible without clicking
-  anything. Prev/Next buttons in the header (above the list, since they
-  page through every result found) scroll the next/previous card into
-  view and highlight it; Open/Actions buttons on each card cover the
-  usual open/open-with/show-in-file-manager/copy-path/favorite/delete
-  actions. A Stop button on the tab itself cancels a search mid-run.
+- **Detailed Results tab**: a compact filename list on the left for quick
+  navigation, and every result as a full card (filename, path/date/size,
+  every content match highlighted and wrapped) stacked in one scrolling
+  column on the right, sortable by Number of Hits/Name/Location/Modified/
+  Size (Number of Hits, most first, is the default). Clicking a name in
+  the list, or the Prev/Next buttons in the header (above the list, since
+  they page through every result found, not matches within one file),
+  scrolls the matching card into view and highlights it. Open/Actions
+  buttons on each card cover the usual open/open-with/show-in-file-
+  manager/copy-path/favorite/delete actions. A Stop button on the tab
+  itself cancels a search mid-run. Recent results restored on startup
+  (Start tab's Quick Results, and this tab) keep their real match content,
+  not just path/size/date.
 - **Favorite Results tab**: categorized favorites with add/rename/move/
   delete categories and reordering.
 - **Favorite Searches tab**: save/load/delete named filename/content
@@ -93,7 +97,12 @@ glob patterns, the way the original two apps worked.
 - PDF and DOCX content extraction are built in (no external dependency
   required); `ripgrep` and `pdftotext` are optional speed/quality boosts,
   auto-detected with a per-distro install-command dialog if missing.
-- A Nord-palette dark theme.
+- A Nord-palette theme with a dark/light toggle (the sun/moon icon on the
+  toolbar) and a user-configurable accent color (Settings dialog's
+  Appearance tab, by hex code or a color picker) used for highlights,
+  selection, and the toolbar background — readable in both modes: the
+  foreground color used against the accent is chosen for contrast against
+  whatever accent is picked, not assumed to always be light or dark.
 
 Configuration (recent searches, window geometry, favorites, stored
 searches) is stored at `~/.config/searchboar/config.ini`, compatible with

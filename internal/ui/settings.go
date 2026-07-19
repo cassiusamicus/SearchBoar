@@ -2,9 +2,11 @@ package ui
 
 import (
 	"fmt"
+	imgcolor "image/color"
 	"sort"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
@@ -29,6 +31,7 @@ func (a *App) openConfigFile() {
 // sending the user straight to a hand-edited text file.
 func (a *App) showSettingsDialog() {
 	tabs := container.NewAppTabs(
+		container.NewTabItem("Appearance", a.buildAppearanceSettings()),
 		container.NewTabItem("Custom Programs", a.buildCustomProgramsSettings()),
 		container.NewTabItem("Search Cache", a.buildCacheSettings()),
 	)
@@ -40,6 +43,61 @@ func (a *App) showSettingsDialog() {
 	d := dialog.NewCustom("Settings", "Close", content, a.win)
 	d.Resize(fyne.NewSize(520, 420))
 	d.Show()
+}
+
+// buildAppearanceSettings lets the user change the app's accent color
+// (used for highlights, selection, and the toolbar background -- see
+// theme.go's nordTheme.accent) either by typing a hex code or picking one
+// visually, applied immediately without a restart.
+func (a *App) buildAppearanceSettings() fyne.CanvasObject {
+	preview := canvas.NewRectangle(a.theme.accent)
+	preview.SetMinSize(fyne.NewSize(40, 32))
+
+	hexEntry := widget.NewEntry()
+	hexEntry.SetText(a.theme.AccentHex())
+
+	applyHex := func() {
+		if !a.theme.SetAccentHex(hexEntry.Text) {
+			a.setStatus("Invalid hex color -- use the form #RRGGBB")
+			return
+		}
+		preview.FillColor = a.theme.accent
+		preview.Refresh()
+		a.applyThemeChange()
+	}
+	hexEntry.OnSubmitted = func(string) { applyHex() }
+	applyBtn := widget.NewButton("Apply", applyHex)
+
+	pickBtn := widget.NewButton("Pick...", func() {
+		picker := dialog.NewColorPicker("Choose Accent Color", "", func(c imgcolor.Color) {
+			if c == nil {
+				return
+			}
+			a.theme.accent = c
+			hexEntry.SetText(a.theme.AccentHex())
+			preview.FillColor = c
+			preview.Refresh()
+			a.applyThemeChange()
+		}, a.win)
+		picker.Advanced = true
+		picker.Show()
+	})
+
+	resetBtn := widget.NewButton("Reset to Default", func() {
+		a.theme.accent = defaultAccent
+		hexEntry.SetText(a.theme.AccentHex())
+		preview.FillColor = a.theme.accent
+		preview.Refresh()
+		a.applyThemeChange()
+	})
+
+	desc := widget.NewLabel("Accent color, used for highlights, the selected result in Detailed Results, and the toolbar background.")
+	desc.Wrapping = fyne.TextWrapWord
+
+	return container.NewVBox(
+		desc,
+		container.NewHBox(preview, hexEntry, applyBtn, pickBtn, resetBtn),
+	)
 }
 
 // buildCustomProgramsSettings lists every saved custom "open with" program

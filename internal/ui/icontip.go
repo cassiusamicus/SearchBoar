@@ -37,10 +37,21 @@ type iconTipButton struct {
 	timer *time.Timer
 }
 
+// newIconTipButton is only ever used for toolbar icons, which sit on the
+// toolbar's accent-colored background (see mainwindow.go's toolbarBg) --
+// icon is recolored to ColorNameForegroundOnPrimary (the same
+// contrast-aware color used for text on an accent-colored button) rather
+// than the general theme foreground, which flips dark/light with the
+// overall theme and would go dark-on-dark against a dark accent whenever
+// the user is in light mode.
 func newIconTipButton(icon fyne.Resource, tooltip string, win fyne.Window, onTap func()) *iconTipButton {
-	b := &iconTipButton{icon: icon, tooltip: tooltip, win: win, onTap: onTap}
+	b := &iconTipButton{icon: onPrimaryIcon(icon), tooltip: tooltip, win: win, onTap: onTap}
 	b.ExtendBaseWidget(b)
 	return b
+}
+
+func onPrimaryIcon(icon fyne.Resource) fyne.Resource {
+	return theme.NewColoredResource(icon, theme.ColorNameForegroundOnPrimary)
 }
 
 func (b *iconTipButton) CreateRenderer() fyne.WidgetRenderer {
@@ -51,6 +62,18 @@ func (b *iconTipButton) CreateRenderer() fyne.WidgetRenderer {
 
 	content := container.NewStack(b.background, container.NewPadded(b.iconObj))
 	return widget.NewSimpleRenderer(content)
+}
+
+// SetIcon changes the button's icon and tooltip in place (used by the
+// dark/light toggle, which shows a sun in dark mode and a moon in light
+// mode -- the icon representing the mode you'd switch to).
+func (b *iconTipButton) SetIcon(icon fyne.Resource, tooltip string) {
+	b.icon = onPrimaryIcon(icon)
+	b.tooltip = tooltip
+	if b.iconObj != nil {
+		b.iconObj.Resource = b.icon
+		b.iconObj.Refresh()
+	}
 }
 
 func (b *iconTipButton) Tapped(*fyne.PointEvent) {

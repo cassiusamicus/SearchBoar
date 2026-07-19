@@ -32,6 +32,8 @@ type Config struct {
 	CustomPrograms        map[string]string
 	RecentResults         []RecentResult
 	Workspaces            map[string]LocationWorkspace
+	AccentColor           string // hex, e.g. "#225167"; empty = theme default
+	ThemeMode             string // "dark" or "light"; empty = dark (default)
 }
 
 type RecentConfig struct {
@@ -43,15 +45,30 @@ type RecentConfig struct {
 	LastFilePattern string
 }
 
-// RecentResult is a lightweight (no content-match text) record of one
-// file found by the most recently completed search, shown on the Start
-// tab so recent results survive an app restart.
+// RecentResult is a record of one file found by the most recently
+// completed search, shown on the Start tab (and restored into the
+// Detailed Results tab) so recent results, including their match content,
+// survive an app restart. Matches was added after this was first shipped
+// with no content-match text at all ("lightweight" -- restored results
+// showed as content-less "filename match only" cards even for a search
+// that found real matches, which was confusing enough to fix).
 type RecentResult struct {
 	Path        string
 	DisplayPath string
 	Modified    string
 	SizeBytes   int64
 	SizeHuman   string
+	Matches     []RecentMatch
+}
+
+// RecentMatch mirrors model.ContentMatch's shape without importing
+// internal/model into internal/config, matching how the rest of this
+// package (FavoriteRecord, StoredSearch) defines its own local types
+// rather than reusing UI/model types.
+type RecentMatch struct {
+	LineNum          int
+	ContextStartLine int
+	ContextLines     []string
 }
 
 // WindowState mirrors the original app's convention: X/Y default to -1 to
@@ -143,6 +160,7 @@ func Load(path string) (*Config, error) {
 	cfg.loadCustomPrograms(doc)
 	cfg.loadRecentResults(doc)
 	cfg.loadWorkspaces(doc)
+	cfg.loadAppearance(doc)
 	return cfg, nil
 }
 
@@ -162,6 +180,7 @@ func (c *Config) Save() error {
 	c.saveCustomPrograms(doc)
 	c.saveRecentResults(doc)
 	c.saveWorkspaces(doc)
+	c.saveAppearance(doc)
 
 	tmp, err := os.CreateTemp(filepath.Dir(c.path), ".config-*.ini.tmp")
 	if err != nil {
