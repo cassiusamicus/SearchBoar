@@ -102,9 +102,13 @@ func (t *startTab) build() fyne.CanvasObject {
 		resultsListCard,
 	)
 
-	// Right column: Prev/Next + count above the cards, mirroring Detailed
-	// Results' header, then the cards filling the rest of the column.
-	navHeader := container.NewHBox(t.view.prevBtn, t.view.nextBtn, layout.NewSpacer(), t.view.countLabel)
+	// Right column: nav buttons + count above the cards, mirroring Detailed
+	// Results' header (see its own comment for the outer/inner ordering),
+	// then the cards filling the rest of the column.
+	navHeader := container.NewHBox(
+		t.view.prevBtn, t.view.matchPrevBtn, t.view.matchNextBtn, t.view.nextBtn,
+		layout.NewSpacer(), t.view.countLabel,
+	)
 	right := container.NewBorder(navHeader, nil, nil, nil, t.view.scroll)
 
 	t.refresh()

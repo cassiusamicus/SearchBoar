@@ -31,11 +31,17 @@ type resultsView struct {
 	sortField string // "Name", "Location", "Modified", "Size", "Number of hits"
 	sortAsc   bool
 	order     []int // display index -> app.searchResults index
-	selIdx    int   // "current" card (Prev/Next + highlight target), -1 if none
+	selIdx    int   // "current" card/file (outer Rewind/Fast-Forward + card border), -1 if none
+	curMatch  int   // "current" term instance within v.cards[selIdx] (inner Back/Forward), -1 if none
 
 	countLabel *widget.Label
-	prevBtn    *widget.Button
-	nextBtn    *widget.Button
+	// prevBtn/nextBtn (outer, Rewind/Fast-Forward icons) step whole files;
+	// matchPrevBtn/matchNextBtn (inner, plain Back/Forward icons) step one
+	// term instance at a time within/across files -- a tape recorder's
+	// fast-forward-vs-single-step distinction, matching how differently
+	// large a jump each pair makes.
+	prevBtn, nextBtn           *iconTipButton
+	matchPrevBtn, matchNextBtn *iconTipButton
 
 	list     *widget.List
 	scroll   *container.Scroll
@@ -45,22 +51,26 @@ type resultsView struct {
 	lastCardRefresh time.Time // throttles addResult's Refresh calls; see there
 }
 
-// resultCard is one result's card: a translucent highlight rectangle
-// (shown only for the "current" card) stacked behind the actual content.
+// resultCard is one result's card: a bordered highlight rectangle (shown
+// only for the "current" card) stacked behind the actual content, plus one
+// bordered frame per content match (matchFrames, parallel to the result's
+// Matches) marking whichever one is the "current" term instance.
 type resultCard struct {
-	root      fyne.CanvasObject
-	highlight *canvas.Rectangle
-	resultIdx int // index into app.searchResults
+	root        fyne.CanvasObject
+	highlight   *canvas.Rectangle
+	matchFrames []*canvas.Rectangle // parallel to app.searchResults[resultIdx].Matches
+	resultIdx   int                 // index into app.searchResults
 }
 
 func newResultsView(a *App, sortField string, sortAsc bool) *resultsView {
-	return &resultsView{app: a, sortField: sortField, sortAsc: sortAsc, selIdx: -1}
+	return &resultsView{app: a, sortField: sortField, sortAsc: sortAsc, selIdx: -1, curMatch: -1}
 }
 
-// build constructs the list, cards, and Prev/Next/count widgets. Callers
-// arrange these (v.list, v.scroll, v.prevBtn, v.nextBtn, v.countLabel)
-// into their own layout -- a full tab with a header row of sort controls,
-// or a compact panel with just Prev/Next above the cards.
+// build constructs the list, cards, and nav/count widgets. Callers arrange
+// these (v.list, v.scroll, v.prevBtn/nextBtn, v.matchPrevBtn/matchNextBtn,
+// v.countLabel) into their own layout -- a full tab with a header row of
+// sort controls, or a compact panel with just the nav buttons above the
+// cards.
 func (v *resultsView) build() {
 	v.countLabel = widget.NewLabel("")
 	v.cardsBox = container.NewVBox()
@@ -78,17 +88,20 @@ func (v *resultsView) build() {
 	)
 	v.list.OnSelected = func(id widget.ListItemID) {
 		v.selIdx = id
+		v.resetCurMatch()
 		v.updateHighlight()
 		v.scrollToCurrent()
 		v.updateNavButtons()
 	}
 
-	v.prevBtn = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() { v.step(-1) })
-	v.nextBtn = widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() { v.step(1) })
-	v.prevBtn.Importance = widget.LowImportance
-	v.nextBtn.Importance = widget.LowImportance
+	v.prevBtn = newIconTipButton(theme.MediaFastRewindIcon(), "Previous file", v.app.win, func() { v.step(-1) })
+	v.nextBtn = newIconTipButton(theme.MediaFastForwardIcon(), "Next file", v.app.win, func() { v.step(1) })
+	v.matchPrevBtn = newIconTipButton(theme.NavigateBackIcon(), "Previous match", v.app.win, func() { v.stepMatch(-1) })
+	v.matchNextBtn = newIconTipButton(theme.NavigateNextIcon(), "Next match", v.app.win, func() { v.stepMatch(1) })
 	v.prevBtn.Disable()
 	v.nextBtn.Disable()
+	v.matchPrevBtn.Disable()
+	v.matchNextBtn.Disable()
 }
 
 func (v *resultsView) updateListRow(id widget.ListItemID, l *widget.Label) {
@@ -150,11 +163,14 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 
 	re := v.app.currentContentRegex()
 	blocks := []fyne.CanvasObject{titleRow, meta, widget.NewSeparator()}
+	matchFrames := make([]*canvas.Rectangle, len(res.Matches))
 	for i, m := range res.Matches {
 		if i > 0 {
 			blocks = append(blocks, widget.NewSeparator())
 		}
-		blocks = append(blocks, v.buildMatchBlock(m, re))
+		block, frame := v.buildMatchBlock(m, re)
+		matchFrames[i] = frame
+		blocks = append(blocks, block)
 	}
 	if len(res.Matches) == 0 {
 		blocks = append(blocks, widget.NewLabel("(filename match only -- no content preview)"))
@@ -163,10 +179,20 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	highlight := canvas.NewRectangle(color.Transparent)
 	body := container.NewPadded(container.NewVBox(blocks...))
 
-	return &resultCard{root: container.NewStack(highlight, body), highlight: highlight, resultIdx: resultIdx}
+	return &resultCard{
+		root: container.NewStack(highlight, body), highlight: highlight,
+		matchFrames: matchFrames, resultIdx: resultIdx,
+	}
 }
 
-func (v *resultsView) buildMatchBlock(m model.ContentMatch, re *regexp.Regexp) fyne.CanvasObject {
+// buildMatchBlock renders one content match's context lines, and returns a
+// frame rectangle stacked behind them -- transparent until updateHighlight
+// marks this specific match as the "current" one (the inner Back/Forward
+// buttons' target), giving each term instance its own "you are here"
+// indicator distinct from every other instance on screen, in the same
+// card or elsewhere -- separate from, and complementing, the per-word
+// highlight marks every match already carries (see highlightMarkSegment).
+func (v *resultsView) buildMatchBlock(m model.ContentMatch, re *regexp.Regexp) (fyne.CanvasObject, *canvas.Rectangle) {
 	var rows []fyne.CanvasObject
 	for li, line := range m.ContextLines {
 		lineNum := m.ContextStartLine + li
@@ -191,11 +217,14 @@ func (v *resultsView) buildMatchBlock(m model.ContentMatch, re *regexp.Regexp) f
 		rt.Wrapping = fyne.TextWrapWord
 		rows = append(rows, rt)
 	}
-	return container.NewVBox(rows...)
+	frame := canvas.NewRectangle(color.Transparent)
+	content := container.NewPadded(container.NewVBox(rows...))
+	return container.NewStack(frame, content), frame
 }
 
-// highlightSegments splits line into plain/bold-highlighted runs around
-// every match of re.
+// highlightSegments splits line into plain/highlighted runs around every
+// match of re, using highlightMarkSegment (a background-marker, not just
+// colored/bold text -- see its own doc comment for why) for the matches.
 func highlightSegments(line string, re *regexp.Regexp) []widget.RichTextSegment {
 	var segs []widget.RichTextSegment
 	last := 0
@@ -203,10 +232,7 @@ func highlightSegments(line string, re *regexp.Regexp) []widget.RichTextSegment 
 		if loc[0] > last {
 			segs = append(segs, &widget.TextSegment{Text: line[last:loc[0]], Style: widget.RichTextStyleInline})
 		}
-		segs = append(segs, &widget.TextSegment{
-			Text:  line[loc[0]:loc[1]],
-			Style: widget.RichTextStyle{Inline: true, TextStyle: fyne.TextStyle{Bold: true}, ColorName: theme.ColorNamePrimary},
-		})
+		segs = append(segs, &highlightMarkSegment{text: line[loc[0]:loc[1]]})
 		last = loc[1]
 	}
 	if last < len(line) {
@@ -215,40 +241,215 @@ func highlightSegments(line string, re *regexp.Regexp) []widget.RichTextSegment 
 	return segs
 }
 
-// step moves the "current" card by delta, scrolling it into view and
-// highlighting it -- every card's content is already visible by scrolling
-// manually, so this is a shortcut to jump straight to the next/previous
-// one, not the only way to reach it.
+// highlightMarkSegment renders a run of matched text with an opaque
+// background behind it, like a highlighter pen, instead of just colored
+// bold text. Colored text alone wasn't enough: the accent (even
+// contrast-adjusted via effectivePrimary for legibility against dark
+// panels) and the card body's own foreground text color can end up close
+// enough in brightness that bold+color barely reads as different from the
+// surrounding text. widget.RichTextStyle has no public background field --
+// the one Fyne uses internally for inline code is hardcoded to
+// ColorNameInputBackground, a deliberately neutral color not meant to
+// stand out -- so this implements a background+tight-fit layout directly,
+// the same technique Fyne's own inline-code segment uses internally.
+// Background/text are effectivePrimary/ForegroundOnPrimary, the same
+// guaranteed-readable pairing HighImportance buttons use, so the mark
+// stays legible no matter what accent color is chosen.
+type highlightMarkSegment struct {
+	text string
+}
+
+func (h *highlightMarkSegment) Inline() bool                        { return true }
+func (h *highlightMarkSegment) Textual() string                     { return h.text }
+func (h *highlightMarkSegment) Select(fyne.Position, fyne.Position) {}
+func (h *highlightMarkSegment) SelectedText() string                { return "" }
+func (h *highlightMarkSegment) Unselect()                           {}
+
+func (h *highlightMarkSegment) Visual() fyne.CanvasObject {
+	bg := canvas.NewRectangle(color.Transparent)
+	txt := canvas.NewText(h.text, color.Transparent)
+	txt.TextStyle = fyne.TextStyle{Bold: true}
+	c := &fyne.Container{Layout: highlightMarkLayout{}, Objects: []fyne.CanvasObject{bg, txt}}
+	h.Update(c)
+	return c
+}
+
+func (h *highlightMarkSegment) Update(o fyne.CanvasObject) {
+	c := o.(*fyne.Container)
+	bg := c.Objects[0].(*canvas.Rectangle)
+	txt := c.Objects[1].(*canvas.Text)
+
+	th := fyne.CurrentApp().Settings().Theme()
+	v := fyne.CurrentApp().Settings().ThemeVariant()
+	bg.FillColor = th.Color(theme.ColorNamePrimary, v)
+	bg.CornerRadius = th.Size(theme.SizeNameSelectionRadius)
+	bg.Refresh()
+	txt.Text = h.text
+	txt.Color = th.Color(theme.ColorNameForegroundOnPrimary, v)
+	txt.TextStyle = fyne.TextStyle{Bold: true}
+	txt.Refresh()
+}
+
+// highlightMarkLayout keeps the background tight to the text, mirroring
+// Fyne's own unexported codeInlineLayout (used for the same purpose by
+// inline code segments): without it, a row layout stretching the segment
+// to fill trailing space would stretch the highlight fill along with it.
+type highlightMarkLayout struct{}
+
+func (highlightMarkLayout) MinSize(o []fyne.CanvasObject) fyne.Size {
+	return o[1].MinSize()
+}
+
+func (highlightMarkLayout) Layout(o []fyne.CanvasObject, _ fyne.Size) {
+	size := o[1].MinSize()
+	for _, obj := range o {
+		obj.Resize(size)
+		obj.Move(fyne.NewPos(0, 0))
+	}
+}
+
+// step moves the "current" card (file) by delta -- the outer Rewind/
+// Fast-Forward buttons -- scrolling it into view and bordering it. Every
+// card's content is already visible by scrolling manually, so this is a
+// shortcut to jump straight to the next/previous file, not the only way
+// to reach it. Resets the current term instance to the new card's first
+// match (see stepMatch for stepping through instances one at a time,
+// without changing files).
 func (v *resultsView) step(delta int) {
 	next := v.selIdx + delta
 	if next < 0 || next >= len(v.order) {
 		return
 	}
 	v.selIdx = next
+	v.resetCurMatch()
 	v.updateHighlight()
 	v.scrollToCurrent()
 	v.updateNavButtons()
 	v.list.Select(next)
 }
 
-// selectionColor is the theme's selection color, used to highlight the
-// "current" card the same way a selected list row is highlighted elsewhere
-// in the app.
-func selectionColor() color.Color {
-	variant := fyne.CurrentApp().Settings().ThemeVariant()
-	return fyne.CurrentApp().Settings().Theme().Color(theme.ColorNameSelection, variant)
+// resetCurMatch points curMatch at the current card's first match, or -1
+// if it has none (a filename-only hit) -- called whenever the current
+// card changes by any means other than stepMatch itself, so a fresh card
+// always starts at its first instance rather than carrying over whatever
+// match index happened to be current on the previous card.
+func (v *resultsView) resetCurMatch() {
+	if len(v.matchesOf(v.selIdx)) == 0 {
+		v.curMatch = -1
+		return
+	}
+	v.curMatch = 0
+}
+
+// matchesOf returns cardIdx's content matches, or nil if cardIdx is out of
+// range -- out-of-range is treated as "no matches" rather than a caller
+// error throughout this file specifically so findMatch's boundary-probing
+// (checking one card past either end) doesn't need its own special case.
+func (v *resultsView) matchesOf(cardIdx int) []model.ContentMatch {
+	if cardIdx < 0 || cardIdx >= len(v.order) {
+		return nil
+	}
+	return v.app.searchResults[v.order[cardIdx]].Matches
+}
+
+// findMatch searches from the current position in the given direction
+// (+1 or -1) for the next reachable term instance, moving into the next/
+// previous file once the current file's matches are exhausted and
+// skipping any file with no content matches at all (a filename-only hit
+// has nothing to step to). ok is false once there's nothing further in
+// that direction.
+func (v *resultsView) findMatch(delta int) (cardIdx, matchIdx int, ok bool) {
+	cardIdx = v.selIdx
+	matchIdx = v.curMatch + delta
+	for {
+		if cardIdx < 0 || cardIdx >= len(v.order) {
+			return 0, 0, false
+		}
+		if matches := v.matchesOf(cardIdx); matchIdx >= 0 && matchIdx < len(matches) {
+			return cardIdx, matchIdx, true
+		}
+		if delta < 0 {
+			cardIdx--
+			matchIdx = len(v.matchesOf(cardIdx)) - 1
+		} else {
+			cardIdx++
+			matchIdx = 0
+		}
+	}
+}
+
+// stepMatch moves the "current" term instance by delta -- the inner Back/
+// Forward buttons -- scrolling straight to that specific match block and
+// framing it (see updateHighlight), crossing into the next/previous file
+// once the current file's matches run out (see findMatch).
+func (v *resultsView) stepMatch(delta int) {
+	cardIdx, matchIdx, ok := v.findMatch(delta)
+	if !ok {
+		return
+	}
+	fileChanged := cardIdx != v.selIdx
+	v.selIdx = cardIdx
+	v.curMatch = matchIdx
+	v.updateHighlight()
+	v.scrollToCurrentMatch()
+	v.updateNavButtons()
+	if fileChanged {
+		v.list.Select(cardIdx)
+	}
 }
 
 func (v *resultsView) updateHighlight() {
-	sel := selectionColor()
+	th := fyne.CurrentApp().Settings().Theme()
+	variant := fyne.CurrentApp().Settings().ThemeVariant()
+	// A solid accent-colored frame, not a translucent fill: with several
+	// cards visible in the scroll area at once (a tall window, or several
+	// short results), a subtle background tint on the current one was easy
+	// to miss next to the others -- especially now that individual matched
+	// terms inside every card also carry a background mark (see
+	// highlightMarkSegment), which a whole-card tint in the same color
+	// family would just blend into. A clearly bordered frame reads as "the
+	// current card" unambiguously regardless of how many others are
+	// visible, and doesn't compete visually with the in-text highlights.
+	borderColor := th.Color(theme.ColorNamePrimary, variant)
+	matchFillColor := translucent(borderColor, 0x30)
 	for i, card := range v.cards {
 		if i == v.selIdx {
-			card.highlight.FillColor = sel
+			card.highlight.StrokeColor = borderColor
+			card.highlight.StrokeWidth = 3
 		} else {
-			card.highlight.FillColor = color.Transparent
+			card.highlight.StrokeColor = color.Transparent
+			card.highlight.StrokeWidth = 0
 		}
 		card.highlight.Refresh()
+
+		// Same idea, one level down: within the current card, exactly one
+		// match block -- the one the inner buttons last landed on -- gets
+		// its own frame, so which specific instance you've stepped to
+		// stays obvious even when several are visible in the same card at
+		// once (a tinted fill here, not just a border, since a match block
+		// is small enough that a border alone is easy to lose against the
+		// surrounding text; the card-level frame above stays border-only
+		// since a fill across a whole card would fight with the in-text
+		// highlight marks it contains).
+		for mi, frame := range card.matchFrames {
+			if i == v.selIdx && mi == v.curMatch {
+				frame.StrokeColor = borderColor
+				frame.StrokeWidth = 2
+				frame.FillColor = matchFillColor
+			} else {
+				frame.StrokeColor = color.Transparent
+				frame.StrokeWidth = 0
+				frame.FillColor = color.Transparent
+			}
+			frame.Refresh()
+		}
 	}
+}
+
+// translucent returns c with its alpha replaced by alpha, preserving hue.
+func translucent(c color.Color, alpha uint8) color.Color {
+	r, g, b, _ := c.RGBA()
+	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: alpha}
 }
 
 func (v *resultsView) scrollToCurrent() {
@@ -259,10 +460,34 @@ func (v *resultsView) scrollToCurrent() {
 	v.scroll.ScrollToOffset(fyne.NewPos(0, pos.Y))
 }
 
+// scrollToCurrentMatch scrolls to the specific match block curMatch points
+// at, not just its card -- important for a card with many matches spread
+// across a tall scroll area. card.matchFrames[i] is nested several
+// containers deep inside card.root, so unlike scrollToCurrent (where
+// card.root is cardsBox's direct child and its own Position() is already
+// cardsBox-relative), the offset needs computing via absolute screen
+// positions instead.
+func (v *resultsView) scrollToCurrentMatch() {
+	if v.selIdx < 0 || v.selIdx >= len(v.cards) {
+		return
+	}
+	card := v.cards[v.selIdx]
+	if v.curMatch < 0 || v.curMatch >= len(card.matchFrames) {
+		v.scrollToCurrent()
+		return
+	}
+	driver := fyne.CurrentApp().Driver()
+	framePos := driver.AbsolutePositionForObject(card.matchFrames[v.curMatch])
+	contentPos := driver.AbsolutePositionForObject(v.cardsBox)
+	v.scroll.ScrollToOffset(fyne.NewPos(0, framePos.Y-contentPos.Y))
+}
+
 func (v *resultsView) updateNavButtons() {
 	if len(v.order) == 0 {
 		v.prevBtn.Disable()
 		v.nextBtn.Disable()
+		v.matchPrevBtn.Disable()
+		v.matchNextBtn.Disable()
 		return
 	}
 	if v.selIdx <= 0 {
@@ -274,6 +499,16 @@ func (v *resultsView) updateNavButtons() {
 		v.nextBtn.Disable()
 	} else {
 		v.nextBtn.Enable()
+	}
+	if _, _, ok := v.findMatch(-1); ok {
+		v.matchPrevBtn.Enable()
+	} else {
+		v.matchPrevBtn.Disable()
+	}
+	if _, _, ok := v.findMatch(1); ok {
+		v.matchNextBtn.Enable()
+	} else {
+		v.matchNextBtn.Disable()
 	}
 }
 
@@ -342,20 +577,32 @@ func (v *resultsView) resort() {
 
 	if len(v.order) == 0 {
 		v.selIdx = -1
+		v.curMatch = -1
 		v.updateNavButtons()
 		return
 	}
 
+	// Re-sorting changes which position a file is at, not the file itself
+	// or its matches -- so if the previously-selected file is still found,
+	// curMatch (an index into that same file's Matches) is still valid and
+	// left alone. Only reset it if there was no previous selection, or the
+	// file it pointed to is gone (fell back to newIdx's zero value, a
+	// different file than whatever was selected).
 	newIdx := 0
+	found := false
 	if selectedResult >= 0 {
 		for i, resultIdx := range v.order {
 			if resultIdx == selectedResult {
 				newIdx = i
+				found = true
 				break
 			}
 		}
 	}
 	v.selIdx = newIdx
+	if !found {
+		v.resetCurMatch()
+	}
 	v.updateHighlight()
 	v.scrollToCurrent()
 	v.updateNavButtons()
@@ -415,6 +662,7 @@ func (v *resultsView) addResult(model.FileResult) {
 
 	if v.selIdx < 0 {
 		v.selIdx = 0
+		v.resetCurMatch()
 		v.updateHighlight()
 	}
 	v.updateNavButtons()
@@ -424,6 +672,7 @@ func (v *resultsView) clear() {
 	v.order = nil
 	v.cards = nil
 	v.selIdx = -1
+	v.curMatch = -1
 	if v.cardsBox != nil {
 		v.cardsBox.Objects = nil
 		v.cardsBox.Refresh()
@@ -440,5 +689,11 @@ func (v *resultsView) clear() {
 	}
 	if v.nextBtn != nil {
 		v.nextBtn.Disable()
+	}
+	if v.matchPrevBtn != nil {
+		v.matchPrevBtn.Disable()
+	}
+	if v.matchNextBtn != nil {
+		v.matchNextBtn.Disable()
 	}
 }

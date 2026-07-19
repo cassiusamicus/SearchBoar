@@ -37,17 +37,17 @@ type iconTipButton struct {
 	timer *time.Timer
 }
 
-// newIconTipButton is only ever used for toolbar icons, which sit on the
-// toolbar's accent-colored background (see mainwindow.go's toolbarBg) --
-// icon is recolored to colorNameToolbarIcon (a contrast-aware color paired
-// specifically with that raw accent background, not ColorNameForegroundOnPrimary
-// -- that one's paired with effectivePrimary, an adjusted-for-legibility
-// variant of the accent used elsewhere, which isn't what's actually behind
-// these icons) rather than the general theme foreground, which flips
-// dark/light with the overall theme and would go dark-on-dark against a
-// dark accent whenever the user is in light mode.
+// newIconTipButton takes icon as-is -- callers on the toolbar's own
+// accent-colored background (see mainwindow.go's toolbarBg) must wrap it
+// with onPrimaryIcon themselves first (colorNameToolbarIcon is a
+// contrast-aware color paired specifically with that raw accent
+// background; the plain theme foreground would flip dark/light with the
+// overall theme and go dark-on-dark against a dark accent in light mode).
+// Everywhere else -- a normal panel background, not the toolbar -- an
+// unwrapped icon (still a ThemedResource, so it already follows the
+// general foreground color) is correct as-is.
 func newIconTipButton(icon fyne.Resource, tooltip string, win fyne.Window, onTap func()) *iconTipButton {
-	b := &iconTipButton{icon: onPrimaryIcon(icon), tooltip: tooltip, win: win, onTap: onTap}
+	b := &iconTipButton{icon: icon, tooltip: tooltip, win: win, onTap: onTap}
 	b.ExtendBaseWidget(b)
 	return b
 }
@@ -68,9 +68,10 @@ func (b *iconTipButton) CreateRenderer() fyne.WidgetRenderer {
 
 // SetIcon changes the button's icon and tooltip in place (used by the
 // dark/light toggle, which shows a sun in dark mode and a moon in light
-// mode -- the icon representing the mode you'd switch to).
+// mode -- the icon representing the mode you'd switch to). Takes icon
+// as-is, same as the constructor -- see its doc comment.
 func (b *iconTipButton) SetIcon(icon fyne.Resource, tooltip string) {
-	b.icon = onPrimaryIcon(icon)
+	b.icon = icon
 	b.tooltip = tooltip
 	if b.iconObj != nil {
 		b.iconObj.Resource = b.icon

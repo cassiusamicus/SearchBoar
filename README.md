@@ -81,14 +81,25 @@ glob patterns, the way the original two apps worked.
   every content match highlighted and wrapped) stacked in one scrolling
   column on the right, sortable by Number of Hits/Name/Location/Modified/
   Size (Number of Hits, most first, is the default). Clicking a name in
-  the list, or the Prev/Next buttons in the header (above the list, since
-  they page through every result found, not matches within one file),
-  scrolls the matching card into view and highlights it. Open/Actions
-  buttons on each card cover the usual open/open-with/show-in-file-
-  manager/copy-path/favorite/delete actions. A Stop button on the tab
-  itself cancels a search mid-run -- there's also a Stop button right next
-  to the progress bar at the bottom of the window, visible no matter which
-  tab is open, so cancelling a slow search never means hunting for the
+  the list, or the nav buttons in the header (above the list, since they
+  page through every result found, not matches within one file), scrolls
+  the matching card into view and highlights it. The header has two
+  button pairs, tape-recorder style: the outer Rewind/Fast-Forward icons
+  jump file-to-file, and the inner Back/Forward icons step through
+  individual term instances one at a time (crossing into the next/
+  previous file once the current one's are exhausted) -- each pairing has
+  a hover tooltip. The current file gets a bordered frame around the
+  whole card; the specific term instance you've stepped to also gets its
+  own bordered/tinted frame around just that match, so which one you're
+  looking at stays obvious even with several files' worth of matches
+  visible on screen at once. Every matched term itself is marked with an
+  opaque background (not just colored text), for contrast regardless of
+  accent color. Open/Actions buttons on each card cover the usual open/
+  open-with/show-in-file-manager/copy-path/favorite/delete actions. A
+  Stop button on the tab itself cancels a search mid-run -- there's also
+  a Stop button right next to the progress bar at the bottom of the
+  window, visible no matter which tab is open, so cancelling a slow
+  search never means hunting for the
   right tab first. Recent results restored on startup (Start tab's Quick
   Results, and this tab) keep their real match content, not just
   path/size/date.

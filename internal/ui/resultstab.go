@@ -79,7 +79,11 @@ func (t *resultsTab) build() fyne.CanvasObject {
 	header := container.NewHBox(
 		widget.NewLabel("Sort by:"), sortSelect, dirBtn,
 		widget.NewSeparator(),
-		t.view.prevBtn, t.view.nextBtn,
+		// Outer pair (Rewind/Fast-Forward icons) brackets the inner pair
+		// (plain Back/Forward icons) -- file-level navigation on the
+		// outside, term-instance-level on the inside, matching a tape
+		// recorder's fast-forward-vs-single-step layout.
+		t.view.prevBtn, t.view.matchPrevBtn, t.view.matchNextBtn, t.view.nextBtn,
 		t.stopBtn,
 		layout.NewSpacer(),
 		t.view.countLabel,
