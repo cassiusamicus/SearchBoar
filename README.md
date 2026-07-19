@@ -39,13 +39,15 @@ result tabs — there's no separate "network search mode" with its own
 glob patterns, the way the original two apps worked.
 
 - **Start tab**: a quick-access dashboard, not a full picker, laid out in
-  two columns instead of one long stacked one. Left: abbreviated Files/
-  Containing fields and a "Search Now" button, a one-line summary of the
-  current search locations with a workspace quick-select and a "Browse
-  for a folder..." shortcut. Right: Quick Results, your most recent
-  search hits, persisted across restarts with a Clear History button.
-  "Open Search Builder"/"Open Search Locations"/"Open Detailed Results"
-  links jump to the full versions for anything more elaborate.
+  two columns. Left: abbreviated Files/Containing fields and a "Search
+  Now" button, a one-line summary of the current search locations with a
+  workspace quick-select and a "Browse for a folder..." shortcut, and a
+  filename list of your most recent search hits filling the rest of the
+  column. Right: the same hits as full cards with Prev/Next, the same
+  live view Detailed Results shows, just laid out compactly -- persisted
+  across restarts with a Clear History button. "Open Search Builder"/
+  "Open Search Locations"/"Open Detailed Results" links jump to the full
+  versions for anything more elaborate.
 - **Search Builder tab**: filename and content regex search (with a
   ripgrep fast path when installed, falling back to a worker-pool walk
   otherwise), a graphical regex builder, file-type quick filters, context

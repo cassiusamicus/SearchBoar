@@ -2,12 +2,12 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -15,11 +15,16 @@ import (
 )
 
 // startTab is the "Start" tab: a quick-access dashboard, not a full
-// picker. Quick Files/Containing entries and a one-folder Browse button
-// cover the common case; "Open Search Builder"/"Open Search Locations"
-// links go to the full versions for anything more elaborate. Recent
-// results and the last search term/paths are persisted to config so they
-// survive a restart.
+// picker. Abbreviated Files/Containing entries and a one-folder Browse
+// button cover the common case; "Open Search Builder"/"Open Search
+// Locations" links go to the full versions for anything more elaborate.
+// The results panel is the same list+cards+Prev/Next resultsView the
+// Detailed Results tab uses (see resultsview.go), just laid out compactly
+// -- a list under the location controls, cards with Prev/Next filling the
+// right column -- so this tab is a real second view of the same results,
+// not a separate frozen snapshot. Recent results and the last search term/
+// paths are persisted to config so they survive a restart (see
+// recordSearch/restoreLastSearch).
 type startTab struct {
 	app *App
 
@@ -27,11 +32,13 @@ type startTab struct {
 	quickContent    *widget.Entry
 	locationLabel   *widget.Label
 	workspaceSelect *widget.Select
-	resultsList     *widget.List
+	view            *resultsView
 }
 
 func newStartTab(a *App) *startTab {
-	return &startTab{app: a}
+	// Fixed sort (no dropdown here, unlike Detailed Results) -- this is
+	// meant to be a quick glance, not a second full results tab.
+	return &startTab{app: a, view: newResultsView(a, "Number of hits", false)}
 }
 
 func (t *startTab) build() fyne.CanvasObject {
@@ -51,7 +58,7 @@ func (t *startTab) build() fyne.CanvasObject {
 		t.commitQuickFields()
 		t.app.favSearches.promptSaveCurrentSearch()
 	})
-	quickSearchCard := widget.NewCard("Quick Search", "", container.NewVBox(
+	searchCard := widget.NewCard("Search", "", container.NewVBox(
 		container.NewBorder(nil, nil, widget.NewLabel("Files:"), nil, t.quickFileEntry),
 		container.NewBorder(nil, nil, widget.NewLabel("Containing:"), nil, t.quickContent),
 		container.NewHBox(searchNowBtn, openBuilderBtn, favoriteBtn),
@@ -67,54 +74,42 @@ func (t *startTab) build() fyne.CanvasObject {
 	t.workspaceSelect = widget.NewSelect(nil, func(name string) { t.selectWorkspace(name) })
 	t.workspaceSelect.PlaceHolder = "Workspace..."
 	t.refreshWorkspaces()
-	quickLocationCard := widget.NewCard("Quick Location", "", container.NewVBox(
+	locationCard := widget.NewCard("Location", "", container.NewVBox(
 		t.locationLabel,
 		container.NewHBox(localOnlyBtn, t.workspaceSelect, browseBtn, openLocationsBtn),
 	))
 
-	t.resultsList = widget.NewList(
-		func() int { return len(t.app.cfg.RecentResults) },
-		func() fyne.CanvasObject { return newTappableBox(widget.NewIcon(theme.FileIcon()), widget.NewLabel("")) },
-		func(id widget.ListItemID, o fyne.CanvasObject) { t.updateResultRow(id, o.(*tappableBox)) },
-	)
+	// view.build() must run before wiring viewAllBtn/clearBtn below, since
+	// they reference t.view.list/scroll.
+	t.view.build()
+
 	viewAllBtn := widget.NewButton("Open Detailed Results  →", func() { t.app.tabs.SelectIndex(tabIndexResults) })
 	clearBtn := widget.NewButton("Clear History", func() { t.clear() })
-	resultsCard := widget.NewCard("Quick Results", "Your most recent search hits", container.NewBorder(
+
+	// Left column: Search/Location cards pinned to the top, then the
+	// result list filling whatever space is left below them -- a fixed
+	// VBox of just the two cards left the rest of the column empty.
+	resultsListCard := widget.NewCard("Results", "", container.NewBorder(
 		nil, container.NewHBox(viewAllBtn, clearBtn), nil, nil,
-		container.NewVScroll(t.resultsList),
+		t.view.list,
 	))
+	left := container.NewBorder(
+		container.NewVBox(searchCard, locationCard), nil, nil, nil,
+		resultsListCard,
+	)
+
+	// Right column: Prev/Next + count above the cards, mirroring Detailed
+	// Results' header, then the cards filling the rest of the column.
+	navHeader := container.NewHBox(t.view.prevBtn, t.view.nextBtn, layout.NewSpacer(), t.view.countLabel)
+	right := container.NewBorder(navHeader, nil, nil, nil, t.view.scroll)
 
 	t.refresh()
 
-	// Two columns instead of one long stacked column: quick search/location
-	// controls on the left, Quick Results filling the right -- a single
-	// VBox left the whole right half of the window empty on anything wider
-	// than a narrow laptop screen.
-	left := container.NewVBox(quickSearchCard, quickLocationCard)
-	return container.NewGridWithColumns(2, left, resultsCard)
-}
-
-func (t *startTab) updateResultRow(id widget.ListItemID, box *tappableBox) {
-	if id >= len(t.app.cfg.RecentResults) {
-		return
-	}
-	r := t.app.cfg.RecentResults[id]
-	path := r.Path
-	label := r.DisplayPath
-	if label == "" {
-		label = path
-	}
-	box.SetObjects([]fyne.CanvasObject{widget.NewIcon(theme.FileIcon()), widget.NewLabel(filepath.Base(path) + "  —  " + label)})
-	box.OnDoubleTapped = func() {
-		if err := t.app.openResult(path); err != nil {
-			t.app.setStatus("Failed to open: " + err.Error())
-		}
-	}
-	box.OnSecondaryTapped = func(e *fyne.PointEvent) {
-		rec := fileRecord{Path: path, Name: filepath.Base(path), ModifiedStr: r.Modified, Size: r.SizeBytes, SizeHuman: r.SizeHuman}
-		menu := t.app.fileContextMenu(rec, nil)
-		widget.ShowPopUpMenuAtPosition(menu, t.app.win.Canvas(), e.AbsolutePosition)
-	}
+	// Two columns instead of one long stacked column: search/location
+	// controls and the result list on the left, result cards filling the
+	// right -- a single VBox left the whole right half of the window
+	// empty on anything wider than a narrow laptop screen.
+	return container.NewGridWithColumns(2, left, right)
 }
 
 // refresh re-reads the quick fields and location summary from the
@@ -129,7 +124,6 @@ func (t *startTab) refresh() {
 	t.quickFileEntry.SetText(t.app.builder.fileEntry.Text)
 	t.quickContent.SetText(t.app.builder.contentCombo.Text)
 	t.locationLabel.SetText(t.locationSummary())
-	t.resultsList.Refresh()
 }
 
 // commitQuickFields writes the quick entries back into the Search
@@ -218,12 +212,23 @@ func (t *startTab) locationSummary() string {
 	return "Searching: " + strings.Join(parts, " + ")
 }
 
+// clear wipes both the persisted recent-search history and the live
+// results shown here and on Detailed Results -- once this panel showed
+// its own frozen snapshot, "Clear History" only needed to touch config,
+// but now that it's a live view over app.searchResults (same data
+// Detailed Results shows), leaving that in place would leave stale cards
+// on screen after "clearing" them.
 func (t *startTab) clear() {
 	t.app.cfg.Recent.LastFilePattern = ""
 	t.app.cfg.Recent.ContentPatterns = nil
 	t.app.cfg.Recent.Paths = nil
 	t.app.cfg.RecentResults = nil
 	t.app.cfg.Save()
+
+	t.app.searchResults = nil
+	t.view.clear()
+	t.app.results.clear()
+
 	t.refresh()
 }
 

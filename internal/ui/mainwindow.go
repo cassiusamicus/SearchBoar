@@ -29,7 +29,9 @@ func (c *fyneColor) RGBA() (r, g, b, a uint32) {
 func wordmark() fyne.CanvasObject {
 	icon := canvas.NewImageFromResource(assets.Icon())
 	icon.FillMode = canvas.ImageFillContain
-	icon.SetMinSize(fyne.NewSize(28, 28))
+	// Slightly smaller than the toolbar's natural row height so the round
+	// logo doesn't crowd/overflow the colored toolbar strip.
+	icon.SetMinSize(fyne.NewSize(22, 22))
 
 	search := canvas.NewText("Search", brandBlue)
 	search.TextStyle = fyne.TextStyle{Bold: true}

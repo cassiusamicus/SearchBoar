@@ -62,6 +62,7 @@ func (a *App) startSearch() {
 
 	a.searchResults = nil
 	a.results.clear()
+	a.start.view.clear()
 	a.tabs.SelectIndex(tabIndexResults)
 
 	a.searchButton.Disable()
@@ -116,6 +117,7 @@ func (a *App) restoreLastSearch() {
 			}
 		}
 		a.results.resort()
+		a.start.view.resort()
 	}
 
 	// The Start tab's own build() already ran a refresh() before this
@@ -199,6 +201,7 @@ func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearc
 			runOnUI(func() {
 				a.searchResults = append(a.searchResults, r)
 				a.results.addResult(r)
+				a.start.view.addResult(r)
 			})
 		case p, ok := <-progress:
 			if !ok {
@@ -235,6 +238,7 @@ func (a *App) finishSearch(err error, filePattern string, searchPaths []string) 
 		// Number of Hits) is applied once here, whether the search
 		// finished, errored, or was stopped early with partial results.
 		a.results.resort()
+		a.start.view.resort()
 		if err != nil && err != context.Canceled {
 			a.statusBar.SetText("Search error: " + err.Error())
 			return
