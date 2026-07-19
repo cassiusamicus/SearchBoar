@@ -125,15 +125,19 @@ func (e *Engine) runRipgrep(ctx context.Context, opts Options, filenameRe, conte
 		}
 
 		isMatchLine := contentRe.MatchString(content)
+		// Excerpted for storage/display only, after isMatchLine is
+		// determined against the real content -- see excerptLine's doc
+		// comment for why an unbounded single line needs this at all.
+		displayLine := excerptLine(content, contentRe, maxContextLineChars)
 
 		switch {
 		case st.cur == nil:
-			st.cur = &model.ContentMatch{ContextStartLine: lineNum, ContextLines: []string{content}}
+			st.cur = &model.ContentMatch{ContextStartLine: lineNum, ContextLines: []string{displayLine}}
 		case lineNum-st.lastLine > gapThreshold:
 			flush(path)
-			st.cur = &model.ContentMatch{ContextStartLine: lineNum, ContextLines: []string{content}}
+			st.cur = &model.ContentMatch{ContextStartLine: lineNum, ContextLines: []string{displayLine}}
 		default:
-			st.cur.ContextLines = append(st.cur.ContextLines, content)
+			st.cur.ContextLines = append(st.cur.ContextLines, displayLine)
 		}
 		if isMatchLine && st.cur.LineNum == 0 {
 			st.cur.LineNum = lineNum

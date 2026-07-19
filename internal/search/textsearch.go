@@ -47,7 +47,10 @@ func matchLinesInSlice(lines []string, re *regexp.Regexp, before, after int) []m
 		if end >= len(lines) {
 			end = len(lines) - 1
 		}
-		ctxLines := append([]string(nil), lines[start:end+1]...)
+		ctxLines := make([]string, end-start+1)
+		for j := start; j <= end; j++ {
+			ctxLines[j-start] = excerptLine(lines[j], re, maxContextLineChars)
+		}
 		matches = append(matches, model.ContentMatch{
 			LineNum:          i + 1,
 			ContextStartLine: start + 1,
@@ -55,4 +58,58 @@ func matchLinesInSlice(lines []string, re *regexp.Regexp, before, after int) []m
 		})
 	}
 	return matches
+}
+
+// maxContextLineChars caps how much of a single line ends up in a
+// ContentMatch's ContextLines. Most source files and prose are wrapped
+// short enough that this never triggers, but real-world text sometimes
+// isn't -- an entire paragraph written as one unwrapped line, a long
+// transcript line, a minified file -- and without a cap, "N lines of
+// context" around a match buried in the middle of such a line dumps the
+// whole thing: possibly several KB of text that doesn't even fit on
+// screen, with the user's actual context-line setting effectively
+// ignored and the real hit lost somewhere in the middle.
+const maxContextLineChars = 400
+
+// excerptLine returns line unchanged if it's already short enough,
+// otherwise a maxRunes-wide window centered on re's first match within
+// it, so the actual hit stays visible rather than being buried past
+// whatever the first screenful happened to show -- with an ellipsis
+// marking whichever side got cut. A context line that doesn't itself
+// contain the term (re is nil, or doesn't match this particular line) has
+// no match position to center on, so the window is taken from the start
+// instead. Operates on runes, not bytes, so multi-byte UTF-8 characters
+// (accented letters, smart quotes, etc., common in real prose) never get
+// split mid-character at the truncation boundary.
+func excerptLine(line string, re *regexp.Regexp, maxRunes int) string {
+	runes := []rune(line)
+	if len(runes) <= maxRunes {
+		return line
+	}
+	mid := maxRunes / 2
+	if re != nil {
+		if loc := re.FindStringIndex(line); loc != nil {
+			mid = len([]rune(line[:(loc[0]+loc[1])/2]))
+		}
+	}
+	start := mid - maxRunes/2
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxRunes
+	if end > len(runes) {
+		end = len(runes)
+		start = end - maxRunes
+		if start < 0 {
+			start = 0
+		}
+	}
+	excerpt := string(runes[start:end])
+	if start > 0 {
+		excerpt = "…" + excerpt
+	}
+	if end < len(runes) {
+		excerpt += "…"
+	}
+	return excerpt
 }

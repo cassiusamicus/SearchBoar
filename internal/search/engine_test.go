@@ -198,6 +198,41 @@ func TestContentSearchRipgrepMatchesWalkFallback(t *testing.T) {
 	}
 }
 
+// TestRipgrepExcerptsLongLines guards the same bug on the ripgrep path as
+// TestMatchLinesInSliceExcerptsLongLines does on the walk path: a real,
+// unwrapped single line (a whole paragraph with no internal newlines, not
+// unusual in real prose/transcripts) shouldn't come back as a multi-KB
+// ContextLines entry just because the match happens to be buried in the
+// middle of it.
+func TestRipgrepExcerptsLongLines(t *testing.T) {
+	if _, err := exec.LookPath("rg"); err != nil {
+		t.Skip("ripgrep not installed")
+	}
+	dir := t.TempDir()
+	longLine := strings.Repeat("filler word ", 300) + "target" + strings.Repeat(" more word", 300)
+	writeFile(t, filepath.Join(dir, "long.txt"), longLine+"\n")
+
+	e := NewEngine()
+	got := runCollect(t, e, Options{
+		Dir:            dir,
+		FilePattern:    `\.txt$`,
+		ContentEnabled: true,
+		ContentPattern: "target",
+		Recursive:      true,
+	})
+
+	if len(got) != 1 || len(got[0].Matches) != 1 {
+		t.Fatalf("got %+v, want exactly one match", got)
+	}
+	line := got[0].Matches[0].ContextLines[0]
+	if len([]rune(line)) > maxContextLineChars+2 {
+		t.Errorf("ripgrep context line is %d runes, want roughly <= %d", len([]rune(line)), maxContextLineChars)
+	}
+	if !strings.Contains(line, "target") {
+		t.Errorf("excerpted line lost the actual match: %q", line)
+	}
+}
+
 // TestRipgrepFindsDOCXContentViaSupplement guards against a real regression:
 // ripgrep treats DOCX (and PDF) as binary and never looks inside them, so a
 // content search that takes the ripgrep fast path used to silently miss
