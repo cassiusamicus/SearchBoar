@@ -12,13 +12,17 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/internal/config"
 )
 
-// buildWorkspaceCard is the Search Locations tab's "Workspaces" card: save
-// the current location selection (checked drives/folders, excluded
-// subfolders, Local/SMB/NFS scope, and any checked SMB/NFS shares) under a
-// name, then load or delete it later. This is the same list the Start
-// tab's quick-select dropdown reads (see starttab.go's refreshWorkspaces),
-// so a workspace saved here is immediately available there too.
-func (t *locationsTab) buildWorkspaceCard() fyne.CanvasObject {
+// buildWorkspaceBar is the Workspace Builder tab's workspace name + Load/
+// Save/Delete row: save the current location selection (checked drives/
+// folders, excluded subfolders, Local/SMB/NFS scope, and any checked
+// SMB/NFS shares) under a name, then load or delete it later. This is the
+// same list the Start tab's quick-select dropdown reads (see starttab.go's
+// refreshWorkspaces), so a workspace saved here is immediately available
+// there too. A full-width bar across the top of the tab, not one more card
+// competing for space in the sidebar -- switching/saving a workspace is
+// common enough to need to be seen immediately, not found by scanning
+// down a column of cards.
+func (t *locationsTab) buildWorkspaceBar() fyne.CanvasObject {
 	t.workspaceSelect = widget.NewSelect(nil, nil)
 	t.workspaceSelect.PlaceHolder = "(none selected)"
 	t.refreshWorkspaceOptions()
@@ -27,9 +31,9 @@ func (t *locationsTab) buildWorkspaceCard() fyne.CanvasObject {
 	saveBtn := widget.NewButton("Save Current as...", func() { t.promptSaveWorkspace() })
 	deleteBtn := widget.NewButton("Delete", func() { t.deleteSelectedWorkspace() })
 
-	return widget.NewCard("Workspaces", "Save/load a named set of search locations", container.NewVBox(
+	return widget.NewCard("Workspace", "Save/load a named set of search locations", container.NewBorder(
+		nil, nil, widget.NewLabel("Name:"), container.NewHBox(loadBtn, saveBtn, deleteBtn),
 		t.workspaceSelect,
-		container.NewHBox(loadBtn, saveBtn, deleteBtn),
 	))
 }
 

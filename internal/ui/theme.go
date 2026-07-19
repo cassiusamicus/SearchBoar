@@ -76,6 +76,66 @@ func colorToHex(c color.Color) string {
 	return fmt.Sprintf("#%02X%02X%02X", r>>8, g>>8, b>>8)
 }
 
+// colorNameToolbarIcon is a custom (non-Fyne-builtin) theme color name for
+// toolbar icon color specifically. The toolbar's background is filled
+// directly from the raw, user-chosen accent (mainwindow.go's toolbarBg),
+// not looked up via ColorNamePrimary -- so toolbar icons need their own
+// contrast pairing against that raw accent, independent of whatever
+// ColorNamePrimary itself resolves to (see effectivePrimary below).
+const colorNameToolbarIcon fyne.ThemeColorName = "toolbarIcon"
+
+// effectivePrimary returns t.accent adjusted for legibility when used as
+// ColorNamePrimary. Fyne hardcodes several widgets' foreground/interactive
+// elements to this color -- the Entry text cursor, a checked Check's
+// checkmark icon, a focused Entry's border, a HighImportance button's
+// background, radio buttons, progress bar fill -- always drawn against
+// that mode's panel/background colors. A deliberately dark accent (picked,
+// per an earlier round, so it wouldn't double as unreadable light text
+// elsewhere -- see defaultAccent) then reads as nearly invisible in
+// exactly those spots: a dark checkmark on a dark checkbox, a dark cursor
+// on a dark input background. Nudged toward white in dark mode (toward
+// black in light mode), but only when the accent's own luminance is
+// already too close to that mode's panels to give reasonable contrast, so
+// it keeps the same hue and still reads as "the chosen accent." Literal
+// uses of the accent -- the toolbar background fill, the Settings color
+// swatch -- go through t.accent directly and are unaffected by this.
+func (t *nordTheme) effectivePrimary() color.Color {
+	return ensureContrast(t.accent, t.dark)
+}
+
+// ensureContrast lightens c toward white (dark mode) or darkens it toward
+// black (light mode) when its own luminance is too close to that mode's
+// panel colors to be legible as a small foreground element, leaving it
+// unchanged otherwise.
+func ensureContrast(c color.Color, dark bool) color.Color {
+	r, g, b, a := c.RGBA()
+	r8, g8, b8 := float64(r>>8), float64(g>>8), float64(b>>8)
+	a8 := uint8(a >> 8)
+	lum := 0.299*r8 + 0.587*g8 + 0.114*b8
+	const (
+		darkModeMinLum  = 130 // below this, a dark accent blends into dark-mode panels
+		lightModeMaxLum = 150 // above this, a light accent blends into light-mode panels
+		blend           = 0.55
+	)
+	switch {
+	case dark && lum < darkModeMinLum:
+		return color.NRGBA{
+			R: uint8(r8 + (255-r8)*blend),
+			G: uint8(g8 + (255-g8)*blend),
+			B: uint8(b8 + (255-b8)*blend),
+			A: a8,
+		}
+	case !dark && lum > lightModeMaxLum:
+		return color.NRGBA{
+			R: uint8(r8 * (1 - blend)),
+			G: uint8(g8 * (1 - blend)),
+			B: uint8(b8 * (1 - blend)),
+			A: a8,
+		}
+	}
+	return c
+}
+
 // contrastingText picks nord0 (near-black) or nord6 (near-white), whichever
 // contrasts better against bg -- used for text/icons drawn on top of the
 // user-configurable accent color, which might end up light (needing dark
@@ -137,7 +197,11 @@ func (t *nordTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 	case theme.ColorNameDisabled, theme.ColorNamePlaceHolder, theme.ColorNameInputBorder, theme.ColorNameScrollBar:
 		return nord3 // works as a mid-tone border/placeholder shade in both modes
 	case theme.ColorNamePrimary:
-		return t.accent
+		return t.effectivePrimary()
+	case colorNameToolbarIcon:
+		// Paired with the toolbar's actual (raw, unadjusted) accent
+		// background -- see the constant's own comment.
+		return contrastingText(t.accent)
 	case theme.ColorNameFocus:
 		// Distinct from Primary (the accent): a Check widget's checked-icon
 		// and its focus ring both use Primary/Focus respectively, and with
@@ -155,10 +219,13 @@ func (t *nordTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 	case theme.ColorNameHyperlink:
 		return nord9
 	case theme.ColorNameForegroundOnPrimary:
-		// The accent is user-chosen and might be light or dark -- unlike
-		// every other color pair here, this can't be a fixed value without
-		// risking unreadable text (e.g. dark text on a dark accent).
-		return contrastingText(t.accent)
+		// Paired with effectivePrimary (not the raw accent): a
+		// HighImportance button's background is ColorNamePrimary, which is
+		// effectivePrimary, not t.accent -- pairing this against the raw
+		// accent instead would recompute contrast for a color that isn't
+		// actually what's being drawn on, and could pick e.g. light text
+		// for a background that effectivePrimary already lightened.
+		return contrastingText(t.effectivePrimary())
 	case theme.ColorNameError:
 		return nord11
 	case theme.ColorNameForegroundOnError, theme.ColorNameForegroundOnSuccess, theme.ColorNameForegroundOnWarning:

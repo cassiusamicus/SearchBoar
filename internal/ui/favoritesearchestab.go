@@ -102,6 +102,7 @@ func (t *favoriteSearchesTab) deleteSelected() {
 		t.app.ssStore.Save()
 		t.selected = -1
 		t.refresh()
+		t.app.start.refreshSavedSearches()
 	}, t.app.win)
 }
 
@@ -120,5 +121,6 @@ func (t *favoriteSearchesTab) promptSaveCurrentSearch() {
 		}
 		t.app.ssStore.Save()
 		t.refresh()
+		t.app.start.refreshSavedSearches()
 	}, t.app.win)
 }

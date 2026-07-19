@@ -16,8 +16,8 @@ import (
 
 // startTab is the "Start" tab: a quick-access dashboard, not a full
 // picker. Abbreviated Files/Containing entries and a one-folder Browse
-// button cover the common case; "Open Search Builder"/"Open Search
-// Locations" links go to the full versions for anything more elaborate.
+// button cover the common case; "Search Builder"/"Workspace Builder"
+// links go to the full versions for anything more elaborate.
 // The results panel is the same list+cards+Prev/Next resultsView the
 // Detailed Results tab uses (see resultsview.go), just laid out compactly
 // -- a list under the location controls, cards with Prev/Next filling the
@@ -28,11 +28,12 @@ import (
 type startTab struct {
 	app *App
 
-	quickFileEntry  *widget.Entry
-	quickContent    *widget.Entry
-	locationLabel   *widget.Label
-	workspaceSelect *widget.Select
-	view            *resultsView
+	quickFileEntry    *widget.Entry
+	quickContent      *widget.Entry
+	locationLabel     *widget.Label
+	savedSearchSelect *widget.Select
+	workspaceSelect   *widget.Select
+	view              *resultsView
 }
 
 func newStartTab(a *App) *startTab {
@@ -48,35 +49,38 @@ func (t *startTab) build() fyne.CanvasObject {
 	t.quickContent.SetPlaceHolder("Text or regex to search for")
 	t.quickContent.OnSubmitted = func(string) { t.searchNow() }
 
+	// Search and Location rows follow the same shape -- primary action,
+	// then the button to the full tab (no "Open" prefix, just the
+	// destination's name), then a quick-select dropdown for something
+	// already saved -- so the two cards read as one consistent pattern
+	// instead of two differently-organized ones.
 	searchNowBtn := widget.NewButtonWithIcon("Search Now", theme.SearchIcon(), func() { t.searchNow() })
 	searchNowBtn.Importance = widget.HighImportance
-	openBuilderBtn := widget.NewButton("Open Search Builder  →", func() {
+	openBuilderBtn := widget.NewButton("Search Builder  →", func() {
 		t.commitQuickFields()
 		t.app.tabs.SelectIndex(tabIndexBuilder)
 	})
-	favoriteBtn := widget.NewButtonWithIcon("Save as Favorite Search", theme.HistoryIcon(), func() {
-		t.commitQuickFields()
-		t.app.favSearches.promptSaveCurrentSearch()
-	})
+	t.savedSearchSelect = widget.NewSelect(nil, func(name string) { t.selectSavedSearch(name) })
+	t.savedSearchSelect.PlaceHolder = "Saved Searches..."
+	t.refreshSavedSearches()
 	searchCard := widget.NewCard("Search", "", container.NewVBox(
 		container.NewBorder(nil, nil, widget.NewLabel("Files:"), nil, t.quickFileEntry),
 		container.NewBorder(nil, nil, widget.NewLabel("Containing:"), nil, t.quickContent),
-		container.NewHBox(searchNowBtn, openBuilderBtn, favoriteBtn),
+		container.NewHBox(searchNowBtn, openBuilderBtn, t.savedSearchSelect),
 	))
 
 	t.locationLabel = widget.NewLabel("")
 	t.locationLabel.Wrapping = fyne.TextWrapWord
-	localOnlyBtn := widget.NewButton("Local Storage Only", func() { t.localOnly() })
-	browseBtn := widget.NewButton("Browse for a folder...", func() { t.quickBrowse() })
-	openLocationsBtn := widget.NewButton("Open Search Locations  →", func() {
+	browseBtn := widget.NewButton("Browse for Folder", func() { t.quickBrowse() })
+	openLocationsBtn := widget.NewButton("Workspace Builder  →", func() {
 		t.app.tabs.SelectIndex(tabIndexLocations)
 	})
 	t.workspaceSelect = widget.NewSelect(nil, func(name string) { t.selectWorkspace(name) })
-	t.workspaceSelect.PlaceHolder = "Workspace..."
+	t.workspaceSelect.PlaceHolder = "Saved Workspaces..."
 	t.refreshWorkspaces()
 	locationCard := widget.NewCard("Location", "", container.NewVBox(
 		t.locationLabel,
-		container.NewHBox(localOnlyBtn, t.workspaceSelect, browseBtn, openLocationsBtn),
+		container.NewHBox(browseBtn, openLocationsBtn, t.workspaceSelect),
 	))
 
 	// view.build() must run before wiring viewAllBtn/clearBtn below, since
@@ -149,19 +153,9 @@ func (t *startTab) searchNow() {
 	t.app.startSearch()
 }
 
-// localOnly is a one-click shortcut for the common case: search local
-// drives only, skipping SMB/NFS network scanning entirely (and the
-// mount-authorization prompts that come with it).
-func (t *startTab) localOnly() {
-	t.app.locations.localCheck.SetChecked(true)
-	t.app.locations.smbCheck.SetChecked(false)
-	t.app.locations.nfsCheck.SetChecked(false)
-	t.locationLabel.SetText(t.locationSummary())
-}
-
-// selectWorkspace applies a saved workspace (built/managed on the Search
-// Locations tab) directly from the Start tab, so switching between a few
-// regular search areas doesn't require a trip to the full tab.
+// selectWorkspace applies a saved workspace (built/managed on the
+// Workspace Builder tab) directly from the Start tab, so switching between
+// a few regular search areas doesn't require a trip to the full tab.
 func (t *startTab) selectWorkspace(name string) {
 	w, ok := t.app.wsStore.Get(name)
 	if !ok {
@@ -173,12 +167,42 @@ func (t *startTab) selectWorkspace(name string) {
 
 // refreshWorkspaces reloads the quick-select's options from the store --
 // called on build and whenever a workspace is saved/deleted from the
-// Search Locations tab, so both stay in sync.
+// Workspace Builder tab, so both stay in sync.
 func (t *startTab) refreshWorkspaces() {
 	if t.workspaceSelect == nil {
 		return
 	}
 	t.workspaceSelect.SetOptions(workspaceNames(t.app.wsStore.List()))
+}
+
+// selectSavedSearch loads a saved search (built/managed on the Favorite
+// Searches tab) into the quick fields and the Search Builder's real
+// fields, mirroring selectWorkspace -- loads it, doesn't run it, so the
+// user can still adjust before clicking Search Now.
+func (t *startTab) selectSavedSearch(name string) {
+	s, ok := t.app.ssStore.Get(name)
+	if !ok {
+		return
+	}
+	t.app.builder.fileEntry.SetText(s.FilePattern)
+	t.app.builder.contentCombo.SetText(s.ContentPattern)
+	t.quickFileEntry.SetText(s.FilePattern)
+	t.quickContent.SetText(s.ContentPattern)
+}
+
+// refreshSavedSearches reloads the quick-select's options from the store --
+// called on build and whenever a search is saved/deleted from the
+// Favorite Searches tab, so both stay in sync.
+func (t *startTab) refreshSavedSearches() {
+	if t.savedSearchSelect == nil {
+		return
+	}
+	searches := t.app.ssStore.List()
+	names := make([]string, len(searches))
+	for i, s := range searches {
+		names[i] = s.Name
+	}
+	t.savedSearchSelect.SetOptions(names)
 }
 
 func (t *startTab) quickBrowse() {
@@ -216,7 +240,7 @@ func (t *startTab) locationSummary() string {
 		parts = append(parts, "NFS exports")
 	}
 	if len(parts) == 0 {
-		return "Searching: (nothing selected -- see Search Locations)"
+		return "Searching: (nothing selected -- see Workspace Builder)"
 	}
 	return "Searching: " + strings.Join(parts, " + ")
 }

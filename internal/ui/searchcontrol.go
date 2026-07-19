@@ -51,7 +51,7 @@ func (a *App) searchOptionsTemplate() search.Options {
 
 func (a *App) startSearch() {
 	if !a.locations.anyLocationSelected() {
-		a.setStatus("No search location selected (see Search Locations tab)")
+		a.setStatus("No search location selected (see Workspace Builder tab)")
 		return
 	}
 	if a.cancelSearch != nil {
@@ -90,6 +90,7 @@ func (a *App) startSearch() {
 	a.results.stopBtn.Enable()
 	a.progressBar.Show()
 	a.progressBar.SetValue(0)
+	a.bottomStopBtn.Show()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancelSearch = cancel
@@ -158,7 +159,7 @@ func groupTermMatches(matches []cache.TermMatch, filenameRe *regexp.Regexp) []mo
 }
 
 // restoreLastSearch pre-fills the Search Builder's filename pattern,
-// pre-checks the Search Locations tree, and repopulates the Results tab
+// pre-checks the Workspace Builder tree, and repopulates the Results tab
 // with whatever the most recently completed search found, all loaded from
 // config -- so "View All Results" from the Start tab's Recent Results
 // isn't empty on a fresh launch just because no search has run yet this
@@ -276,6 +277,20 @@ func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearc
 
 	go func() { done <- a.searchEng.Run(ctx, opts, results, progress) }()
 
+	// runOnUI (fyne.Do) queues onto Fyne's own unbounded, async work queue --
+	// it doesn't block here, but it also doesn't get un-queued by a later
+	// cancellation. A fast local search over many files can produce results
+	// far quicker than the UI thread can turn each one into a result card
+	// (see resultsview.go's addResult, which re-lays-out the whole card
+	// list on every call), so by the time Stop is clicked, a large backlog
+	// of already-queued card-building work can still be sitting in that
+	// queue -- and since nothing before this fix ever checked cancellation
+	// here, every remaining result kept adding to it regardless, making a
+	// cancel look like it had no effect while the UI visibly kept crawling
+	// through results for a long time afterward. Checking ctx.Err() before
+	// queuing each one stops the backlog from growing further the moment
+	// Stop is clicked, instead of only stopping new candidates being
+	// searched (which was already happening, just not enough on its own).
 	resultsOpen, progressOpen := true, true
 	for resultsOpen || progressOpen {
 		select {
@@ -284,12 +299,31 @@ func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearc
 				resultsOpen = false
 				continue
 			}
+			if ctx.Err() != nil {
+				continue
+			}
 			if root.DisplayPrefix != "" {
 				if rel, err := filepath.Rel(root.Path, r.Path); err == nil {
 					r.DisplayPath = root.DisplayPrefix + "/" + filepath.ToSlash(rel)
 				}
 			}
 			runOnUI(func() {
+				// Re-checked here, not just before queuing above: Fyne's
+				// work queue is unbounded, and a fast search (real
+				// documents with several matches each, so each card is
+				// non-trivial to build, are plenty fast enough to trigger
+				// this) can get results queued well ahead of what the UI
+				// thread has actually gotten around to rendering. Without
+				// this, everything already sitting in the queue at the
+				// moment Stop is clicked still pays its full build cost
+				// before the backlog visibly stops growing -- checking
+				// again here means each already-queued closure becomes a
+				// near-no-op instead, so the backlog drains almost
+				// immediately rather than only stopping new results from
+				// being added to it.
+				if ctx.Err() != nil {
+					return
+				}
 				clearCacheSeedOnce()
 				a.searchResults = append(a.searchResults, r)
 				a.results.addResult(r)
@@ -300,7 +334,13 @@ func (a *App) runOneRoot(ctx context.Context, opts search.Options, root netsearc
 				progressOpen = false
 				continue
 			}
+			if ctx.Err() != nil {
+				continue
+			}
 			runOnUI(func() {
+				if ctx.Err() != nil {
+					return
+				}
 				if p.Total > 0 {
 					a.progressBar.SetValue(float64(p.Searched) / float64(p.Total))
 				}
@@ -322,6 +362,7 @@ func (a *App) finishSearch(err error, filePattern string, searchPaths []string, 
 		a.stopButton.Disable()
 		a.results.stopBtn.Disable()
 		a.progressBar.Hide()
+		a.bottomStopBtn.Hide()
 		a.cancelSearch = nil
 		if err == nil {
 			// A search that ran to completion and found nothing proves the

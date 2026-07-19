@@ -43,6 +43,13 @@ type App struct {
 	toolbarBg   *canvas.Rectangle // toolbar background, kept in sync with theme.accent
 	statusBar   *widget.Label
 	progressBar *widget.ProgressBar
+	// bottomStopBtn sits right next to progressBar, shown/hidden together
+	// with it -- the toolbar's Stop icon and Detailed Results' own Stop
+	// button both require navigating there first, but the progress bar
+	// (and this Stop button beside it) is visible no matter which tab is
+	// open, since it lives in the window's own bottom bar, not inside any
+	// one tab's content.
+	bottomStopBtn *widget.Button
 
 	searchButton *iconTipButton
 	stopButton   *iconTipButton

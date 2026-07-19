@@ -20,7 +20,7 @@ import (
 // commonTermsTab is the "Common Search Terms" tab: a small, user-curated
 // list of content terms searched often enough to be worth keeping an
 // up-to-date index of. Adding a term immediately searches for it (over the
-// current Search Locations selection) and saves the matches to the cache
+// current Workspace Builder selection) and saves the matches to the cache
 // database; Reindex repeats that for a term whose files may have changed
 // since. This is deliberately on-demand, not a background filesystem
 // indexer -- nothing is searched until the user asks for it.
@@ -51,7 +51,7 @@ func (t *commonTermsTab) build() fyne.CanvasObject {
 		func(id widget.ListItemID, o fyne.CanvasObject) { t.updateRow(id, o.(*termRow)) },
 	)
 
-	header := widget.NewLabel("Terms you search for often. Adding one searches your current Search Locations right away and saves the matches here; use the refresh button on any term to update it later (e.g. after files change).")
+	header := widget.NewLabel("Terms you search for often. Adding one searches your current Workspace Builder selection right away and saves the matches here; use the refresh button on any term to update it later (e.g. after files change).")
 	header.Wrapping = fyne.TextWrapWord
 
 	top := container.NewVBox(header, container.NewBorder(nil, nil, nil, addBtn, t.entry))
@@ -185,7 +185,7 @@ func (r *termRow) CreateRenderer() fyne.WidgetRenderer {
 // one-operation-at-a-time behavior.
 func (a *App) reindexTerm(term string) {
 	if !a.locations.anyLocationSelected() {
-		a.setStatus("No search location selected -- can't index \"" + term + "\" (see Search Locations tab)")
+		a.setStatus("No search location selected -- can't index \"" + term + "\" (see Workspace Builder tab)")
 		return
 	}
 	if a.cancelSearch != nil {
@@ -203,6 +203,7 @@ func (a *App) reindexTerm(term string) {
 	a.commonTerms.setIndexing(term, true)
 	a.stopButton.Enable()
 	a.results.stopBtn.Enable()
+	a.bottomStopBtn.Show()
 	a.setStatus("Indexing \"" + term + "\"...")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -212,6 +213,7 @@ func (a *App) reindexTerm(term string) {
 		defer runOnUI(func() {
 			a.stopButton.Disable()
 			a.results.stopBtn.Disable()
+			a.bottomStopBtn.Hide()
 			a.cancelSearch = nil
 		})
 

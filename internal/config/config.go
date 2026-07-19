@@ -94,7 +94,7 @@ type StoredSearch struct {
 	Directory      string
 }
 
-// LocationWorkspace is a named, saved set of Search Locations selections --
+// LocationWorkspace is a named, saved set of Workspace Builder selections --
 // which local roots/excluded subfolders are checked, whether local/SMB/NFS
 // are in scope, and which specific SMB shares/NFS exports (if any) were
 // selected -- so a user can jump straight back to "my usual places to

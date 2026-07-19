@@ -74,7 +74,7 @@ func (e *Engine) ResolveRoots(ctx context.Context, opts LocationOptions, log fun
 }
 
 // DiscoverSMB scans cidr for SMB hosts and lists their shares, for
-// populating the Search Locations tab's share picker. It does not mount
+// populating the Workspace Builder tab's share picker. It does not mount
 // anything.
 func (e *Engine) DiscoverSMB(ctx context.Context, cidr, user, pass string) ([]SMBShare, error) {
 	hosts, err := discoverSMBHosts(ctx, cidr)

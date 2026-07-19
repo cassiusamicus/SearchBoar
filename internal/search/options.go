@@ -25,7 +25,7 @@ type Options struct {
 	ExcludeGlobs []string
 
 	// ExcludeDirs are absolute directory paths (and their descendants) to
-	// skip entirely -- used by the Search Locations picker, where a
+	// skip entirely -- used by the Workspace Builder picker, where a
 	// subfolder nested under an otherwise-checked drive can be individually
 	// unchecked.
 	ExcludeDirs []string

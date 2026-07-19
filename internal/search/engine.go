@@ -212,6 +212,14 @@ func (e *Engine) runCandidates(ctx context.Context, candidates []candidate, opts
 
 produceLoop:
 	for _, c := range candidates {
+		// Checked explicitly, not just via the select below: with enough
+		// workers idle and ready to receive, "case jobs <- c" can be ready
+		// on every iteration too, and select picks pseudo-randomly among
+		// ready cases -- an explicit check makes a cancellation take effect
+		// on the very next iteration, rather than leaving it to chance.
+		if ctx.Err() != nil {
+			break produceLoop
+		}
 		select {
 		case <-ctx.Done():
 			break produceLoop

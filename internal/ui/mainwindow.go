@@ -77,7 +77,7 @@ func (a *App) buildMainWindow() {
 	a.tabs = container.NewAppTabs(
 		startItem,
 		container.NewTabItemWithIcon("Search Builder", theme.SearchIcon(), builderContent),
-		container.NewTabItemWithIcon("Search Locations", theme.StorageIcon(), locationsContent),
+		container.NewTabItemWithIcon("Workspace Builder", theme.StorageIcon(), locationsContent),
 		container.NewTabItemWithIcon("Detailed Results", theme.ListIcon(), resultsContent),
 		container.NewTabItemWithIcon("Favorite Results", theme.DocumentIcon(), favContent),
 		container.NewTabItemWithIcon("Favorite Searches", theme.HistoryIcon(), favSearchesContent),
@@ -99,6 +99,9 @@ func (a *App) buildMainWindow() {
 	a.statusBar.Wrapping = fyne.TextWrapBreak
 	a.progressBar = widget.NewProgressBar()
 	a.progressBar.Hide()
+	a.bottomStopBtn = widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), func() { a.stopSearch() })
+	a.bottomStopBtn.Hide()
+	progressRow := container.NewBorder(nil, nil, nil, a.bottomStopBtn, a.progressBar)
 
 	toolbar := a.buildToolbar()
 
@@ -111,7 +114,7 @@ func (a *App) buildMainWindow() {
 
 	content := container.NewBorder(
 		toolbarRow,
-		container.NewVBox(a.progressBar, a.statusBar),
+		container.NewVBox(progressRow, a.statusBar),
 		nil, nil,
 		a.tabs,
 	)

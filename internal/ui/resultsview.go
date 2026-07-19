@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -40,6 +41,8 @@ type resultsView struct {
 	scroll   *container.Scroll
 	cardsBox *fyne.Container
 	cards    []*resultCard // parallel to order
+
+	lastCardRefresh time.Time // throttles addResult's Refresh calls; see there
 }
 
 // resultCard is one result's card: a translucent highlight rectangle
@@ -170,7 +173,16 @@ func (v *resultsView) buildMatchBlock(m model.ContentMatch, re *regexp.Regexp) f
 		segs := []widget.RichTextSegment{
 			&widget.TextSegment{Text: fmt.Sprintf("%4d:  ", lineNum), Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder}},
 		}
-		if re != nil && lineNum == m.LineNum {
+		// Highlighting used to be gated on lineNum == m.LineNum -- but a
+		// ContentMatch's ContextLines can span several genuinely-matching
+		// lines grouped into one block (consecutive matches within
+		// gapThreshold of each other get merged, see runRipgrep/
+		// matchLinesInSlice), with only the first one recorded as LineNum.
+		// Any other real match line in the same block was silently never
+		// highlighted, even though it does contain the term -- checking
+		// every line against re instead (highlightSegments already no-ops
+		// into plain text for a line with no match) finds all of them.
+		if re != nil {
 			segs = append(segs, highlightSegments(line, re)...)
 		} else {
 			segs = append(segs, &widget.TextSegment{Text: line, Style: widget.RichTextStyleInline})
@@ -377,8 +389,27 @@ func (v *resultsView) addResult(model.FileResult) {
 		v.cardsBox.Objects = append(v.cardsBox.Objects, widget.NewSeparator())
 	}
 	v.cardsBox.Objects = append(v.cardsBox.Objects, card.root)
-	v.cardsBox.Refresh()
-	v.list.Refresh()
+
+	// Refresh re-lays-out the whole (ever-growing) card VBox, which gets
+	// more expensive the more results have already arrived -- calling it
+	// on every single result makes total the cost of a large result set
+	// scale roughly with the square of its size, and a fast search (many
+	// small local files, say) can then queue results faster than the UI
+	// thread can grind through that redraw cost. The visible symptom was
+	// the app appearing to keep "still searching" -- new cards kept
+	// appearing -- for a long time after the search itself (or a Stop
+	// click) had already finished, since Fyne's UI work queue had a large
+	// already-committed backlog of these redraws left to get through.
+	// Throttled the same way engine.go throttles progress updates; safe to
+	// skip here because resort() (always called when a search finishes,
+	// see finishSearch) unconditionally rebuilds and refreshes every card
+	// regardless, so nothing added during a throttled window is ever
+	// permanently left unrendered.
+	if time.Since(v.lastCardRefresh) >= 100*time.Millisecond {
+		v.cardsBox.Refresh()
+		v.list.Refresh()
+		v.lastCardRefresh = time.Now()
+	}
 
 	v.countLabel.SetText(fmt.Sprintf("%d result(s)", len(v.order)))
 

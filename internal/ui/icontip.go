@@ -39,11 +39,13 @@ type iconTipButton struct {
 
 // newIconTipButton is only ever used for toolbar icons, which sit on the
 // toolbar's accent-colored background (see mainwindow.go's toolbarBg) --
-// icon is recolored to ColorNameForegroundOnPrimary (the same
-// contrast-aware color used for text on an accent-colored button) rather
-// than the general theme foreground, which flips dark/light with the
-// overall theme and would go dark-on-dark against a dark accent whenever
-// the user is in light mode.
+// icon is recolored to colorNameToolbarIcon (a contrast-aware color paired
+// specifically with that raw accent background, not ColorNameForegroundOnPrimary
+// -- that one's paired with effectivePrimary, an adjusted-for-legibility
+// variant of the accent used elsewhere, which isn't what's actually behind
+// these icons) rather than the general theme foreground, which flips
+// dark/light with the overall theme and would go dark-on-dark against a
+// dark accent whenever the user is in light mode.
 func newIconTipButton(icon fyne.Resource, tooltip string, win fyne.Window, onTap func()) *iconTipButton {
 	b := &iconTipButton{icon: onPrimaryIcon(icon), tooltip: tooltip, win: win, onTap: onTap}
 	b.ExtendBaseWidget(b)
@@ -51,7 +53,7 @@ func newIconTipButton(icon fyne.Resource, tooltip string, win fyne.Window, onTap
 }
 
 func onPrimaryIcon(icon fyne.Resource) fyne.Resource {
-	return theme.NewColoredResource(icon, theme.ColorNameForegroundOnPrimary)
+	return theme.NewColoredResource(icon, colorNameToolbarIcon)
 }
 
 func (b *iconTipButton) CreateRenderer() fyne.WidgetRenderer {

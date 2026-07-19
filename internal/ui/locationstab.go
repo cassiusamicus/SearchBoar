@@ -15,7 +15,7 @@ import (
 )
 
 // networkShareItem is one discovered SMB share or NFS export, shown as a
-// checkable row in the Search Locations tab's share picker.
+// checkable row in the Workspace Builder tab's share picker.
 type networkShareItem struct {
 	kind string // "smb" or "nfs"
 	host string
@@ -31,7 +31,7 @@ func (i networkShareItem) label() string {
 	return fmt.Sprintf("NFS   %s:%s", i.host, i.name)
 }
 
-// locationsTab is the "Search Locations" tab: a tree of local drives and
+// locationsTab is the "Workspace Builder" tab: a tree of local drives and
 // their subfolders, each with a checkbox (the main content of the tab),
 // which location types to search (Local/SMB/NFS), the network settings
 // SMB/NFS discovery needs, and a share picker -- network shares must be
@@ -61,12 +61,14 @@ func newLocationsTab(a *App) *locationsTab {
 }
 
 func (t *locationsTab) build() fyne.CanvasObject {
+	// Local-only by default: scanning/mounting SMB+NFS on every search is
+	// expensive and, for most searches, unwanted -- the Start tab's "Local
+	// Storage Only" button and these same checkboxes here are still how you
+	// opt into network locations for a given search.
 	t.localCheck = widget.NewCheck("Local drives", nil)
 	t.localCheck.SetChecked(true)
 	t.smbCheck = widget.NewCheck("SMB shares", nil)
-	t.smbCheck.SetChecked(true)
 	t.nfsCheck = widget.NewCheck("NFS exports", nil)
-	t.nfsCheck.SetChecked(true)
 
 	t.cidrEntry = widget.NewEntry()
 	t.cidrEntry.SetPlaceHolder("auto or 192.168.1.0/24")
@@ -80,7 +82,6 @@ func (t *locationsTab) build() fyne.CanvasObject {
 
 	sidebar := container.NewVBox(
 		widget.NewCard("Search In", "", container.NewVBox(t.localCheck, t.smbCheck, t.nfsCheck)),
-		t.buildWorkspaceCard(),
 		widget.NewCard("Network Settings", "", container.NewVBox(
 			container.NewBorder(nil, nil, widget.NewLabel("Range:"), nil, t.cidrEntry),
 			widget.NewLabel("SMB credentials (this session only):"),
@@ -103,7 +104,15 @@ func (t *locationsTab) build() fyne.CanvasObject {
 	// Wrapping it in a horizontal scroll lets the window shrink freely;
 	// the two columns scroll together if the window is narrower than they
 	// need.
-	return container.NewBorder(nil, nil, nil, sidebar, container.NewHScroll(main))
+	body := container.NewBorder(nil, nil, nil, sidebar, container.NewHScroll(main))
+
+	// The workspace bar (name + Load/Save/Delete) used to be one more card
+	// stacked in the middle of the right-hand sidebar -- easy to miss, and
+	// no more prominent than "Network Settings" below it, even though
+	// switching/saving a workspace is one of the more common things to do
+	// on this tab. A full-width bar across the top puts it somewhere it
+	// can't be missed, ahead of everything else on the page.
+	return container.NewBorder(t.buildWorkspaceBar(), nil, nil, nil, body)
 }
 
 func (t *locationsTab) buildSharesColumn() fyne.CanvasObject {
@@ -234,7 +243,7 @@ func (t *locationsTab) anyLocationSelected() bool {
 }
 
 // restoreCheckedPaths pre-checks the picker with the locations used by the
-// last search (loaded from config), so the Search Locations tab reflects
+// last search (loaded from config), so the Workspace Builder tab reflects
 // them even before the user expands the tree to see the actual nodes.
 func (t *locationsTab) restoreCheckedPaths(paths []string) {
 	for _, p := range paths {
