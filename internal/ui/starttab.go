@@ -37,8 +37,10 @@ type startTab struct {
 }
 
 func newStartTab(a *App) *startTab {
-	// Fixed sort (no dropdown here, unlike Detailed Results) -- this is
-	// meant to be a quick glance, not a second full results tab.
+	// Descending by default: sorting by hit count is most useful with the
+	// most-matched files first, unlike the other fields (name/location/
+	// date), where ascending is the more natural default -- matches
+	// Detailed Results' own default (see resultstab.go).
 	return &startTab{app: a, view: newResultsView(a, "Number of hits", false)}
 }
 
@@ -102,11 +104,35 @@ func (t *startTab) build() fyne.CanvasObject {
 		resultsListCard,
 	)
 
+	sortSelect := widget.NewSelect([]string{"Number of hits", "Name", "Location", "Modified", "Size"}, func(v string) {
+		t.view.sortField = v
+		t.view.resort()
+	})
+	sortSelect.SetSelected(t.view.sortField)
+
+	dirBtnText := func() string {
+		if t.view.sortAsc {
+			return "↑"
+		}
+		return "↓"
+	}
+	dirBtn := widget.NewButton(dirBtnText(), nil)
+	dirBtn.OnTapped = func() {
+		t.view.sortAsc = !t.view.sortAsc
+		dirBtn.SetText(dirBtnText())
+		t.view.resort()
+	}
+
 	// Right column: nav buttons + count above the cards, mirroring Detailed
-	// Results' header (see its own comment for the outer/inner ordering),
-	// then the cards filling the rest of the column.
+	// Results' header (see its own comment for the outer/inner ordering).
+	// Sort controls and the jump-to-top/bottom buttons sit to the right of
+	// the tape-player buttons, per the user's own description of where they
+	// belong; the cards fill the rest of the column below.
 	navHeader := container.NewHBox(
 		t.view.prevBtn, t.view.matchPrevBtn, t.view.matchNextBtn, t.view.nextBtn,
+		widget.NewSeparator(),
+		widget.NewLabel("Sort by:"), sortSelect, dirBtn,
+		t.view.jumpTopBtn, t.view.jumpBottomBtn,
 		layout.NewSpacer(), t.view.countLabel,
 	)
 	right := container.NewBorder(navHeader, nil, nil, nil, t.view.scroll)

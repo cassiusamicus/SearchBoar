@@ -39,9 +39,12 @@ type resultsView struct {
 	// matchPrevBtn/matchNextBtn (inner, plain Back/Forward icons) step one
 	// term instance at a time within/across files -- a tape recorder's
 	// fast-forward-vs-single-step distinction, matching how differently
-	// large a jump each pair makes.
+	// large a jump each pair makes. jumpTopBtn/jumpBottomBtn skip straight
+	// to the very first/last result, for a long result list where even
+	// fast-forwarding file-by-file is too slow to reach either end.
 	prevBtn, nextBtn           *iconTipButton
 	matchPrevBtn, matchNextBtn *iconTipButton
+	jumpTopBtn, jumpBottomBtn  *iconTipButton
 
 	list     *widget.List
 	scroll   *container.Scroll
@@ -98,10 +101,14 @@ func (v *resultsView) build() {
 	v.nextBtn = newIconTipButton(theme.MediaFastForwardIcon(), "Next file", v.app.win, func() { v.step(1) })
 	v.matchPrevBtn = newIconTipButton(theme.NavigateBackIcon(), "Previous match", v.app.win, func() { v.stepMatch(-1) })
 	v.matchNextBtn = newIconTipButton(theme.NavigateNextIcon(), "Next match", v.app.win, func() { v.stepMatch(1) })
+	v.jumpTopBtn = newIconTipButton(theme.MoveUpIcon(), "Jump to first result", v.app.win, func() { v.jumpToFirst() })
+	v.jumpBottomBtn = newIconTipButton(theme.MoveDownIcon(), "Jump to last result", v.app.win, func() { v.jumpToLast() })
 	v.prevBtn.Disable()
 	v.nextBtn.Disable()
 	v.matchPrevBtn.Disable()
 	v.matchNextBtn.Disable()
+	v.jumpTopBtn.Disable()
+	v.jumpBottomBtn.Disable()
 }
 
 func (v *resultsView) updateListRow(id widget.ListItemID, l *widget.Label) {
@@ -319,23 +326,36 @@ func (highlightMarkLayout) Layout(o []fyne.CanvasObject, _ fyne.Size) {
 }
 
 // step moves the "current" card (file) by delta -- the outer Rewind/
-// Fast-Forward buttons -- scrolling it into view and bordering it. Every
-// card's content is already visible by scrolling manually, so this is a
-// shortcut to jump straight to the next/previous file, not the only way
-// to reach it. Resets the current term instance to the new card's first
-// match (see stepMatch for stepping through instances one at a time,
-// without changing files).
+// Fast-Forward buttons. Every card's content is already visible by
+// scrolling manually, so this is a shortcut to jump straight to the next/
+// previous file, not the only way to reach it.
 func (v *resultsView) step(delta int) {
-	next := v.selIdx + delta
-	if next < 0 || next >= len(v.order) {
+	v.jumpTo(v.selIdx + delta)
+}
+
+// jumpToFirst/jumpToLast skip straight to the very first/last result --
+// for a long result list, faster than fast-forwarding through every file
+// to reach either end.
+func (v *resultsView) jumpToFirst() { v.jumpTo(0) }
+func (v *resultsView) jumpToLast()  { v.jumpTo(len(v.order) - 1) }
+
+// jumpTo moves the "current" card straight to idx (a no-op if out of
+// range -- covers both step's relative moves and jumpToFirst/jumpToLast's
+// absolute ones, including on an empty result set, where idx is never in
+// [0, len(v.order)) regardless of direction), scrolling it into view and
+// bordering it, and resets the current term instance to the new card's
+// first match (see stepMatch for stepping through instances one at a
+// time, without changing files).
+func (v *resultsView) jumpTo(idx int) {
+	if idx < 0 || idx >= len(v.order) {
 		return
 	}
-	v.selIdx = next
+	v.selIdx = idx
 	v.resetCurMatch()
 	v.updateHighlight()
 	v.scrollToCurrent()
 	v.updateNavButtons()
-	v.list.Select(next)
+	v.list.Select(idx)
 }
 
 // resetCurMatch points curMatch at the current card's first match, or -1
@@ -498,17 +518,23 @@ func (v *resultsView) updateNavButtons() {
 		v.nextBtn.Disable()
 		v.matchPrevBtn.Disable()
 		v.matchNextBtn.Disable()
+		v.jumpTopBtn.Disable()
+		v.jumpBottomBtn.Disable()
 		return
 	}
 	if v.selIdx <= 0 {
 		v.prevBtn.Disable()
+		v.jumpTopBtn.Disable()
 	} else {
 		v.prevBtn.Enable()
+		v.jumpTopBtn.Enable()
 	}
 	if v.selIdx >= len(v.order)-1 {
 		v.nextBtn.Disable()
+		v.jumpBottomBtn.Disable()
 	} else {
 		v.nextBtn.Enable()
+		v.jumpBottomBtn.Enable()
 	}
 	if _, _, ok := v.findMatch(-1); ok {
 		v.matchPrevBtn.Enable()
@@ -705,5 +731,11 @@ func (v *resultsView) clear() {
 	}
 	if v.matchNextBtn != nil {
 		v.matchNextBtn.Disable()
+	}
+	if v.jumpTopBtn != nil {
+		v.jumpTopBtn.Disable()
+	}
+	if v.jumpBottomBtn != nil {
+		v.jumpBottomBtn.Disable()
 	}
 }

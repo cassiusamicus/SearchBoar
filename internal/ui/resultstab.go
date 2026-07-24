@@ -82,8 +82,10 @@ func (t *resultsTab) build() fyne.CanvasObject {
 		// Outer pair (Rewind/Fast-Forward icons) brackets the inner pair
 		// (plain Back/Forward icons) -- file-level navigation on the
 		// outside, term-instance-level on the inside, matching a tape
-		// recorder's fast-forward-vs-single-step layout.
+		// recorder's fast-forward-vs-single-step layout. jumpTopBtn/
+		// jumpBottomBtn skip straight to either end of a long result list.
 		t.view.prevBtn, t.view.matchPrevBtn, t.view.matchNextBtn, t.view.nextBtn,
+		t.view.jumpTopBtn, t.view.jumpBottomBtn,
 		t.stopBtn,
 		layout.NewSpacer(),
 		t.view.countLabel,

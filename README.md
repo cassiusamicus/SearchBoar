@@ -46,7 +46,9 @@ glob patterns, the way the original two apps worked.
   something already saved (Saved Searches / Saved Workspaces) -- and a
   filename list of your most recent search hits filling the rest of the
   column. Right: the same hits as full cards with Prev/Next, the same live
-  view Detailed Results shows, just laid out compactly -- persisted across
+  view Detailed Results shows, just laid out compactly, with its own sort
+  dropdown (Number of Hits/Name/Location/Modified/Size) and jump-to-
+  first/jump-to-last buttons alongside the nav buttons -- persisted across
   restarts with a Clear History button.
 - **Search Builder tab**: filename and content regex search (with a
   ripgrep fast path when installed, falling back to a worker-pool walk
@@ -88,7 +90,9 @@ glob patterns, the way the original two apps worked.
   jump file-to-file, and the inner Back/Forward icons step through
   individual term instances one at a time (crossing into the next/
   previous file once the current one's are exhausted) -- each pairing has
-  a hover tooltip. The current file gets a bordered frame around the
+  a hover tooltip. Up/down arrow buttons next to those jump straight to
+  the first/last result, for a long result list where even fast-forwarding
+  file-by-file is too slow to reach either end. The current file gets a bordered frame around the
   whole card; the specific term instance you've stepped to also gets its
   own bordered/tinted frame around just that match, so which one you're
   looking at stays obvious even with several files' worth of matches
