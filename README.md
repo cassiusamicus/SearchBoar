@@ -41,7 +41,13 @@ glob patterns, the way the original two apps worked.
 - **Start tab**: the app's one search page, laid out in two columns with a
   draggable divider between them, each section (Search Command/Search
   Locations/Result Preview) given a shaded, bordered box so they read as
-  distinct at a glance. Left: a Search Command card with everything a
+  distinct at a glance. The left column (Search Command + Search Locations)
+  scrolls vertically on its own, and so does the Workspace Builder tab's
+  right-hand sidebar (Search In/Network Settings/Search button) -- so on a
+  short display (a netbook, a laptop window that isn't maximized) the
+  window can shrink well below either column's natural height and every
+  control stays reachable by scrolling instead of being pushed off-screen.
+  Left: a Search Command card with everything a
   search needs -- Containing/File Names regex fields (each with a
   graphical Expr. Wizard; Containing has no separate enable checkbox --
   leave it blank to search filenames only), whose Pattern Type list covers

@@ -80,7 +80,13 @@ func (t *locationsTab) build() fyne.CanvasObject {
 	searchBtn := widget.NewButtonWithIcon("Search", theme.SearchIcon(), func() { t.app.startSearch() })
 	searchBtn.Importance = widget.HighImportance
 
-	sidebar := container.NewVBox(
+	// Wrapped in its own vertical scroll for the same reason the Start tab's
+	// left column is (see its own comment): Border stretches this sidebar
+	// to the tab's full height, so an unwrapped VBox's real height would
+	// otherwise set a floor on the whole window via AppTabs.MinSize() --
+	// tall enough on a short display to push the Search button below the
+	// visible area with no way to reach it.
+	sidebar := container.NewVScroll(container.NewVBox(
 		widget.NewCard("Search In", "", container.NewVBox(t.localCheck, t.smbCheck, t.nfsCheck)),
 		widget.NewCard("Network Settings", "", container.NewVBox(
 			container.NewBorder(nil, nil, widget.NewLabel("Range:"), nil, t.cidrEntry),
@@ -89,7 +95,7 @@ func (t *locationsTab) build() fyne.CanvasObject {
 			container.NewBorder(nil, nil, widget.NewLabel("Pass:"), nil, t.passEntry),
 		)),
 		searchBtn,
-	)
+	))
 
 	tree := widget.NewCard("Storage Locations", "Check drives and folders to search", t.picker.build())
 

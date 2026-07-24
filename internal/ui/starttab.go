@@ -363,7 +363,18 @@ func (t *startTab) build() fyne.CanvasObject {
 	// Left column: Search Command and Search Location -- what to search
 	// for and where. No "Open Detailed Results" shortcut here: the top
 	// nav bar already has that tab.
-	left := container.NewVBox(searchCard, locationCard)
+	//
+	// Wrapped in its own vertical scroll: an unwrapped VBox's MinSize.Height
+	// is the sum of both cards' heights (worse once Advanced Options is
+	// expanded), and since AppTabs.MinSize() takes the max content MinSize
+	// across every tab, that would set a floor on the whole window's height
+	// -- on a short display (a netbook, a laptop with the window not
+	// maximized) tall enough to push Search Now or the Search Locations
+	// card off-screen with no way to reach them. A VScroll's own MinSize is
+	// just a small floor (see Fyne's internal/widget/scroller.go), so this
+	// column can shrink as far as the window does and still reach every
+	// control by scrolling instead.
+	left := container.NewVScroll(container.NewVBox(searchCard, locationCard))
 
 	// view.build() must run before wiring the right column below, since it
 	// references t.view.scroll and the nav buttons.
