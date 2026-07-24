@@ -2,6 +2,7 @@ package ui
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -102,6 +103,93 @@ func TestBuildMatchBlockHighlightsEveryMatchingLineInABlock(t *testing.T) {
 	}
 	if markCountInRow(rows[2]) != 1 {
 		t.Errorf("row 2 (not LineNum, but also a real match) mark count = %d, want 1 -- this is the bug this test guards against", markCountInRow(rows[2]))
+	}
+}
+
+func TestTrimContextLinesUnlimitedReturnsAllLines(t *testing.T) {
+	m := model.ContentMatch{LineNum: 5, ContextStartLine: 3, ContextLines: []string{"a", "b", "c"}}
+	lines, start := trimContextLines(m, 0)
+	if len(lines) != 3 || start != 3 {
+		t.Errorf("trimContextLines(m, 0) = (%v, %d), want the lines unchanged", lines, start)
+	}
+}
+
+func TestTrimContextLinesShorterThanMaxReturnsAllLines(t *testing.T) {
+	m := model.ContentMatch{LineNum: 3, ContextStartLine: 3, ContextLines: []string{"a", "b"}}
+	lines, start := trimContextLines(m, 5)
+	if len(lines) != 2 || start != 3 {
+		t.Errorf("trimContextLines under the cap = (%v, %d), want the lines unchanged", lines, start)
+	}
+}
+
+// TestTrimContextLinesCentersOnMatchLine guards the reason this centers on
+// m.LineNum instead of always keeping the first maxLines from the top of
+// the block: a match recorded near the end of a merged context block would
+// otherwise have its own line trimmed away entirely.
+func TestTrimContextLinesCentersOnMatchLine(t *testing.T) {
+	m := model.ContentMatch{
+		LineNum:          9,
+		ContextStartLine: 5,
+		ContextLines:     []string{"l5", "l6", "l7", "l8", "l9", "l10", "l11"}, // match is "l9", index 4
+	}
+	lines, start := trimContextLines(m, 3)
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3", len(lines))
+	}
+	matchLineIdx := m.LineNum - start
+	if matchLineIdx < 0 || matchLineIdx >= len(lines) || lines[matchLineIdx] != "l9" {
+		t.Errorf("trimContextLines(m, 3) = (%v, start=%d), want the match's own line (\"l9\") kept in the window", lines, start)
+	}
+}
+
+// TestTrimContextLinesNearBlockEdgeStaysInBounds guards the boundary case:
+// centering on a match near either edge of the block must not walk the
+// window past the actual data on the other side.
+func TestTrimContextLinesNearBlockEdgeStaysInBounds(t *testing.T) {
+	m := model.ContentMatch{
+		LineNum:          1,
+		ContextStartLine: 1,
+		ContextLines:     []string{"l1", "l2", "l3", "l4", "l5"}, // match is the very first line
+	}
+	lines, start := trimContextLines(m, 3)
+	if len(lines) != 3 || start != 1 || lines[0] != "l1" {
+		t.Errorf("trimContextLines with the match at the block's start = (%v, start=%d), want [\"l1\" \"l2\" \"l3\"] at start=1", lines, start)
+	}
+}
+
+func TestTruncateListRowFitsWithoutTruncation(t *testing.T) {
+	got := truncateListRow("a.go", "/repo   •   2026-01-01   •   1 KB", 70)
+	want := "a.go   /repo   •   2026-01-01   •   1 KB"
+	if got != want {
+		t.Errorf("truncateListRow (fits) = %q, want %q", got, want)
+	}
+}
+
+// TestTruncateListRowTruncatesDetailNotName guards the point of this
+// function: the name is the primary identifier and must never be cut, even
+// when the combined line is far too long to fit -- only the detail suffix
+// (path/date/size) absorbs the truncation.
+func TestTruncateListRowTruncatesDetailNotName(t *testing.T) {
+	name := "alpha.go"
+	detail := "/very/long/deeply/nested/path/that/does/not/fit   •   2026-01-01   •   4.9 KB"
+	got := truncateListRow(name, detail, 40)
+
+	if !strings.HasPrefix(got, name) {
+		t.Fatalf("truncateListRow = %q, want it to start with the untouched name %q", got, name)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("truncateListRow = %q, want a trailing ellipsis marking the truncation", got)
+	}
+	if length := len([]rune(got)); length > 40 {
+		t.Errorf("truncateListRow result is %d runes, want <= 40", length)
+	}
+}
+
+func TestTruncateListRowExtremelyLongNameAloneReturnsJustName(t *testing.T) {
+	name := strings.Repeat("x", 100)
+	got := truncateListRow(name, "/repo   •   2026-01-01   •   1 KB", 40)
+	if got != name {
+		t.Errorf("truncateListRow with no budget left for detail = %q, want just the name %q", got, name)
 	}
 }
 

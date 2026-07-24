@@ -38,22 +38,22 @@ Local and network search share one regex-based engine and one set of
 result tabs — there's no separate "network search mode" with its own
 glob patterns, the way the original two apps worked.
 
-- **Start tab**: a quick-access dashboard, not a full picker, laid out in
-  two columns with a draggable divider between them. Left: abbreviated
-  Files/Containing fields with a Search/Location row each following the
-  same shape -- primary action, then a link to the matching full tab
-  (Search Builder / Workspace Builder), then a quick-select dropdown for
-  something already saved (Saved Searches / Saved Workspaces) -- and a
-  filename list of your most recent search hits filling the rest of the
-  column. Right: the same hits as full cards with Prev/Next, the same live
-  view Detailed Results shows, just laid out compactly, with its own sort
-  dropdown (Number of Hits/Name/Location/Modified/Size) and jump-to-
-  first/jump-to-last buttons alongside the nav buttons -- persisted across
-  restarts with a Clear History button.
-- **Search Builder tab**: filename and content regex search (with a
-  ripgrep fast path when installed, falling back to a worker-pool walk
-  otherwise), a graphical regex builder, file-type quick filters, context
-  lines, size filters, and glob exclude patterns.
+- **Start tab**: the app's one search page, laid out in two columns with a
+  draggable divider between them. Left: a Search card with everything a
+  search needs -- file-type quick filters, Files/Containing regex fields
+  (each with a graphical regex-builder wizard), Search Now, a Saved
+  Searches quick-select, and Options/Context Lines/File Size Filter/Exclude
+  Patterns/Search Help below that -- then a Location card (a link to
+  Workspace Builder for anything more elaborate, a Saved Workspaces
+  quick-select, and a full line-by-line list of every selected local root
+  and checked SMB/NFS share, not just a truncated one-line summary), then
+  Clear History. Right: your most recent search hits as full cards with
+  Prev/Next, the same live view Detailed Results shows just laid out
+  compactly, with its own sort dropdown (Number of Hits/Name/Location/
+  Modified/Size) and jump-to-first/jump-to-last buttons alongside the nav
+  buttons -- persisted across restarts. Each card here shows fewer context
+  lines around a match than Detailed Results does, centered on the match
+  itself -- enough for a quick glance, not a second full-detail view.
 - **Workspace Builder tab**: a workspace bar across the top (name +
   Load/Save Current as.../Delete -- prominent since switching or saving a
   workspace is one of the more common things to do here, not one more
@@ -78,10 +78,13 @@ glob patterns, the way the original two apps worked.
   the Workspace Builder tab's own workspace bar. A matching quick-select
   dropdown on the Start tab applies a saved workspace in one click without
   a trip to the full tab.
-- **Detailed Results tab**: a compact filename list on the left for quick
-  navigation, and every result as a full card (filename, path/date/size,
-  every content match highlighted and wrapped) stacked in one scrolling
-  column on the right, sortable by Number of Hits/Name/Location/Modified/
+- **Detailed Results tab**: a compact list on the left for quick navigation
+  (filename plus path/date/size on the same line, truncated rather than
+  wrapped so one long path can't force the whole window wider), and every
+  result as a full card (filename, every content match highlighted and
+  wrapped -- path/date/size live on the list row, not repeated here)
+  stacked in one scrolling column on the right, sortable by Number of
+  Hits/Name/Location/Modified/
   Size (Number of Hits, most first, is the default). Clicking a name in
   the list, or the nav buttons in the header (above the list, since they
   page through every result found, not matches within one file), scrolls
@@ -118,8 +121,8 @@ glob patterns, the way the original two apps worked.
   database; a refresh button on each term reindexes it later, e.g. after
   files change. Nothing is indexed proactively — this is not a background
   filesystem indexer, only an on-demand shortcut for terms you've told it
-  matter to you. A normal search (Search Builder or the Start tab) whose
-  content pattern exactly matches an indexed term shows that cached index
+  matter to you. A normal search from the Start tab whose content pattern
+  exactly matches an indexed term shows that cached index
   immediately — before ripgrep or anything else runs — then swaps in the
   live results the moment the real search finds its own first match, so a
   term you search often shows something instantly instead of waiting out

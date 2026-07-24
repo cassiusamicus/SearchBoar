@@ -39,10 +39,16 @@ type App struct {
 	cache     *cache.Cache // also referenced (nil-safe) via searchEng.Cache; kept here too for the Settings dialog's cache stats/clear button
 	theme     *nordTheme
 
-	tabs        *container.AppTabs
-	toolbarBg   *canvas.Rectangle // toolbar background, kept in sync with theme.accent
-	statusBar   *widget.Label
-	progressBar *widget.ProgressBar
+	tabs      *container.AppTabs
+	toolbarBg *canvas.Rectangle // toolbar background, kept in sync with theme.accent
+	// boxedCardBackdrops are the Start tab's Search Command/Search
+	// Location/Result Preview section backdrops (see starttab.go's
+	// boxedCard) -- registered here, like toolbarBg, so applyThemeChange
+	// can recolor them on a dark/light toggle instead of them keeping
+	// whatever shade was current when the Start tab was first built.
+	boxedCardBackdrops []*canvas.Rectangle
+	statusBar          *widget.Label
+	progressBar        *widget.ProgressBar
 	// bottomStopBtn sits right next to progressBar, shown/hidden together
 	// with it -- the toolbar's Stop icon and Detailed Results' own Stop
 	// button both require navigating there first, but the progress bar
@@ -63,7 +69,6 @@ type App struct {
 	searchResults []model.FileResult
 
 	start       *startTab
-	builder     *searchBuilderTab
 	locations   *locationsTab
 	results     *resultsTab
 	favTab      *favoritesTab

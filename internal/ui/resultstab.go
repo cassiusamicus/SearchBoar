@@ -40,8 +40,10 @@ type resultsTab struct {
 func newResultsTab(a *App) *resultsTab {
 	// Descending by default: sorting by hit count is most useful with the
 	// most-matched files first, unlike the other fields (name/location/
-	// date), where ascending is the more natural default.
-	return &resultsTab{app: a, view: newResultsView(a, "Number of hits", false)}
+	// date), where ascending is the more natural default. Unlimited context
+	// lines (0) -- this tab is the full-detail view, unlike the Start tab's
+	// compact panel (see newStartTab).
+	return &resultsTab{app: a, view: newResultsView(a, "Number of hits", false, 0)}
 }
 
 func (t *resultsTab) build() fyne.CanvasObject {

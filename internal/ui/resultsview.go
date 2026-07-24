@@ -46,6 +46,13 @@ type resultsView struct {
 	matchPrevBtn, matchNextBtn *iconTipButton
 	jumpTopBtn, jumpBottomBtn  *iconTipButton
 
+	// maxContextLines caps how many of a match's context lines are shown,
+	// centered on the match's own line (see trimContextLines) -- 0 means
+	// show every line the search collected. The Start tab's compact panel
+	// uses a small cap (a quick glance doesn't need as much surrounding
+	// text as the Detailed Results tab, which passes 0).
+	maxContextLines int
+
 	list     *widget.List
 	scroll   *container.Scroll
 	cardsBox *fyne.Container
@@ -65,8 +72,8 @@ type resultCard struct {
 	resultIdx   int                 // index into app.searchResults
 }
 
-func newResultsView(a *App, sortField string, sortAsc bool) *resultsView {
-	return &resultsView{app: a, sortField: sortField, sortAsc: sortAsc, selIdx: -1, curMatch: -1}
+func newResultsView(a *App, sortField string, sortAsc bool, maxContextLines int) *resultsView {
+	return &resultsView{app: a, sortField: sortField, sortAsc: sortAsc, selIdx: -1, curMatch: -1, maxContextLines: maxContextLines}
 }
 
 // build constructs the list, cards, and nav/count widgets. Callers arrange
@@ -111,12 +118,43 @@ func (v *resultsView) build() {
 	v.jumpBottomBtn.Disable()
 }
 
+// maxListRowChars bounds each list row to one line: a plain widget.Label
+// with wrapping off doesn't clip on its own, and Fyne sizes a window to fit
+// its content's minimum size, so an unbounded path here would force the
+// whole window wider to fit one long entry -- the same pitfall buildCard's
+// own doc comment describes for the filename.
+const maxListRowChars = 70
+
 func (v *resultsView) updateListRow(id widget.ListItemID, l *widget.Label) {
 	if id >= len(v.order) {
 		l.SetText("")
 		return
 	}
-	l.SetText(v.app.searchResults[v.order[id]].Name)
+	res := v.app.searchResults[v.order[id]]
+	detail := fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModDate(res.ModTime), formatSize(res.Size))
+	l.SetText(truncateListRow(res.Name, detail, maxListRowChars))
+}
+
+// truncateListRow combines a result's name and its path/date/size detail
+// onto one line, budgeted to maxRunes total. The name is never touched --
+// it's the primary identifier -- so if the pair doesn't fit, the detail
+// suffix is the one that gets truncated (with an ellipsis marker), never
+// the name.
+func truncateListRow(name, detail string, maxRunes int) string {
+	const sep = "   "
+	full := name + sep + detail
+	if len([]rune(full)) <= maxRunes {
+		return full
+	}
+	budget := maxRunes - len([]rune(name)) - len([]rune(sep)) - 1 // 1 rune of room for the ellipsis
+	if budget <= 0 {
+		return name
+	}
+	runes := []rune(detail)
+	if budget > len(runes) {
+		budget = len(runes)
+	}
+	return name + sep + string(runes[:budget]) + "…"
 }
 
 // displayPath prefers a result's network-style DisplayPath (for files
@@ -130,35 +168,24 @@ func displayPath(res model.FileResult) string {
 
 // buildCard renders one result (identified by its index into
 // app.searchResults, not its display position) as a self-contained card:
-// filename, path/date/size, Open/Actions buttons, and every content match
-// -- everything a click on a list row used to reveal, visible up front.
+// filename, Open/Actions buttons, and every content match -- everything a
+// click on a list row used to reveal, visible up front. Path/date/size
+// live on the list row instead (see updateListRow), not here -- this card
+// is the content-preview side, and repeating the same metadata on both
+// sides added a line's worth of vertical space per card for no benefit.
 func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	res := v.app.searchResults[resultIdx]
 
-	// Both wrapped: a filename or (especially) a directory path has no
-	// guaranteed word-break points (paths use "/", which Fyne's word-wrap
-	// doesn't treat as breakable), so without wrapping either one can
-	// render as a single very long unbroken line -- and since Fyne sizes
-	// a window to fit its content's minimum size, one long path anywhere
-	// in the result list was enough to force the *whole window* wider
-	// than the screen. TextWrapBreak (breaks at any character, not just
-	// word boundaries) is what actually guarantees that regardless of
-	// content; word-wrap alone doesn't help unbroken text like a path.
+	// Wrapped: a filename has no guaranteed word-break points, so without
+	// wrapping it can render as a single very long unbroken line -- and
+	// since Fyne sizes a window to fit its content's minimum size, one
+	// long name anywhere in the result list was enough to force the
+	// *whole window* wider than the screen. TextWrapBreak (breaks at any
+	// character, not just word boundaries) is what actually guarantees
+	// that regardless of content; word-wrap alone doesn't help unbroken
+	// text like a name with no spaces.
 	title := widget.NewRichText(&widget.TextSegment{Text: res.Name, Style: widget.RichTextStyleSubHeading})
 	title.Wrapping = fyne.TextWrapBreak
-	// Marked as secondary by size and slant, not by color: LowImportance
-	// (the default "de-emphasized" choice) renders in ColorNameDisabled,
-	// which in this theme is a mid-gray tuned to read as merely subtle
-	// against a *light* background, but against this card's dark
-	// background it's low-contrast enough to be hard to read outright, not
-	// just subtle. Regular foreground color stays legible in both modes;
-	// smaller + italic still reads clearly as "secondary, not the title or
-	// match text" without sacrificing that legibility.
-	meta := widget.NewLabel(fmt.Sprintf("%s   •   %s   •   %s", filepath.Dir(displayPath(res)), formatModTime(res.ModTime), formatSize(res.Size)))
-	meta.Importance = widget.MediumImportance
-	meta.SizeName = theme.SizeNameCaptionText
-	meta.TextStyle = fyne.TextStyle{Italic: true}
-	meta.Wrapping = fyne.TextWrapBreak
 
 	openBtn := widget.NewButtonWithIcon("Open", theme.MediaPlayIcon(), func() {
 		if err := v.app.openResult(res.Path); err != nil {
@@ -179,7 +206,7 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	titleRow := container.NewBorder(nil, nil, nil, container.NewHBox(openBtn, actionsBtn), title)
 
 	re := v.app.currentContentRegex()
-	blocks := []fyne.CanvasObject{titleRow, meta, widget.NewSeparator()}
+	blocks := []fyne.CanvasObject{titleRow, widget.NewSeparator()}
 	matchFrames := make([]*canvas.Rectangle, len(res.Matches))
 	for i, m := range res.Matches {
 		if i > 0 {
@@ -202,6 +229,38 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	}
 }
 
+// trimContextLines limits how many of a match's context lines are shown,
+// keeping the window centered on the match's own line (m.LineNum) rather
+// than always keeping the first maxLines from the top of the block -- so a
+// match near the end of a merged context block (see matchLinesInSlice/
+// runRipgrep) still keeps its own line visible instead of having it trimmed
+// away. maxLines <= 0 means unlimited: m's lines are returned unchanged, the
+// Detailed Results tab's behavior (see newResultsView's maxContextLines).
+func trimContextLines(m model.ContentMatch, maxLines int) ([]string, int) {
+	if maxLines <= 0 || len(m.ContextLines) <= maxLines {
+		return m.ContextLines, m.ContextStartLine
+	}
+	idx := m.LineNum - m.ContextStartLine
+	if idx < 0 {
+		idx = 0
+	} else if idx >= len(m.ContextLines) {
+		idx = len(m.ContextLines) - 1
+	}
+	start := idx - maxLines/2
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxLines
+	if end > len(m.ContextLines) {
+		end = len(m.ContextLines)
+		start = end - maxLines
+		if start < 0 {
+			start = 0
+		}
+	}
+	return m.ContextLines[start:end], m.ContextStartLine + start
+}
+
 // buildMatchBlock renders one content match's context lines, and returns a
 // frame rectangle stacked behind them -- transparent until updateHighlight
 // marks this specific match as the "current" one (the inner Back/Forward
@@ -210,9 +269,10 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 // card or elsewhere -- separate from, and complementing, the per-word
 // highlight marks every match already carries (see highlightMarkSegment).
 func (v *resultsView) buildMatchBlock(m model.ContentMatch, re *regexp.Regexp) (fyne.CanvasObject, *canvas.Rectangle) {
+	lines, startLine := trimContextLines(m, v.maxContextLines)
 	var rows []fyne.CanvasObject
-	for li, line := range m.ContextLines {
-		lineNum := m.ContextStartLine + li
+	for li, line := range lines {
+		lineNum := startLine + li
 		segs := []widget.RichTextSegment{
 			&widget.TextSegment{Text: fmt.Sprintf("%4d:  ", lineNum), Style: widget.RichTextStyle{Inline: true, ColorName: theme.ColorNamePlaceHolder}},
 		}

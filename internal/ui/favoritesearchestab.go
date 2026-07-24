@@ -14,7 +14,7 @@ import (
 // favoriteSearchesTab is the "Favorite Searches" tab: save/load/delete
 // named filename/content patterns (promoted from a modal dialog to a full
 // tab, alongside Favorite Results). Loading a saved search fills in the
-// Search Builder tab's fields and switches to it.
+// Start tab's search fields and switches to it.
 type favoriteSearchesTab struct {
 	app *App
 
@@ -83,9 +83,9 @@ func (t *favoriteSearchesTab) loadSelected() {
 		return
 	}
 	s := t.searches[t.selected]
-	t.app.builder.fileEntry.SetText(s.FilePattern)
-	t.app.builder.contentCombo.SetText(s.ContentPattern)
-	t.app.tabs.SelectIndex(tabIndexBuilder)
+	t.app.start.fileEntry.SetText(s.FilePattern)
+	t.app.start.contentCombo.SetText(s.ContentPattern)
+	t.app.tabs.SelectIndex(tabIndexStart)
 }
 
 func (t *favoriteSearchesTab) deleteSelected() {
@@ -112,8 +112,8 @@ func (t *favoriteSearchesTab) promptSaveCurrentSearch() {
 			return
 		}
 		err := t.app.ssStore.Add(name, config.StoredSearch{
-			FilePattern:    t.app.builder.fileEntry.Text,
-			ContentPattern: t.app.builder.contentCombo.Text,
+			FilePattern:    t.app.start.fileEntry.Text,
+			ContentPattern: t.app.start.contentCombo.Text,
 		})
 		if err != nil {
 			t.app.setStatus(err.Error())

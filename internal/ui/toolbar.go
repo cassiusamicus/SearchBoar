@@ -12,7 +12,6 @@ import (
 
 const (
 	tabIndexStart = iota
-	tabIndexBuilder
 	tabIndexLocations
 	tabIndexResults
 	tabIndexFavorites

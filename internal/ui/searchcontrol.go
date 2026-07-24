@@ -16,14 +16,14 @@ import (
 	"codeberg.org/cassiusamicus/Utilities/internal/search"
 )
 
-// currentContentRegex compiles the Search Builder tab's current content
-// pattern the same way the engine does, so match highlighting in the
-// Results tab is exactly what the engine actually matched against.
+// currentContentRegex compiles the Start tab's current content pattern the
+// same way the engine does, so match highlighting in the Results tab is
+// exactly what the engine actually matched against.
 func (a *App) currentContentRegex() *regexp.Regexp {
-	if !a.builder.contentEnabled.Checked || a.builder.contentCombo.Text == "" {
+	if !a.start.contentEnabled.Checked || a.start.contentCombo.Text == "" {
 		return nil
 	}
-	re, err := search.CompileRegex(a.builder.contentCombo.Text, a.builder.caseCheck.Checked)
+	re, err := search.CompileRegex(a.start.contentCombo.Text, a.start.caseCheck.Checked)
 	if err != nil {
 		return nil
 	}
@@ -31,21 +31,21 @@ func (a *App) currentContentRegex() *regexp.Regexp {
 }
 
 // searchOptionsTemplate builds the pattern/filter half of search.Options
-// from the Search Builder tab; Dir and ExcludeDirs are filled in per
+// from the Start tab's search fields; Dir and ExcludeDirs are filled in per
 // resolved root.
 func (a *App) searchOptionsTemplate() search.Options {
 	return search.Options{
-		FilePattern:    a.builder.fileEntry.Text,
-		ContentPattern: a.builder.contentCombo.Text,
-		ContentEnabled: a.builder.contentEnabled.Checked,
-		Recursive:      a.builder.recursiveCheck.Checked,
-		CaseSensitive:  a.builder.caseCheck.Checked,
-		IncludeHidden:  a.builder.hiddenCheck.Checked,
-		ContextBefore:  a.builder.beforeSpin.value,
-		ContextAfter:   a.builder.afterSpin.value,
-		MinSizeBytes:   a.builder.minSizeBytes(),
-		MaxSizeBytes:   a.builder.maxSizeBytes(),
-		ExcludeGlobs:   search.SplitExcludePatterns(a.builder.excludeEntry.Text),
+		FilePattern:    a.start.fileEntry.Text,
+		ContentPattern: a.start.contentCombo.Text,
+		ContentEnabled: a.start.contentEnabled.Checked,
+		Recursive:      a.start.recursiveCheck.Checked,
+		CaseSensitive:  a.start.caseCheck.Checked,
+		IncludeHidden:  a.start.hiddenCheck.Checked,
+		ContextBefore:  a.start.beforeSpin.value,
+		ContextAfter:   a.start.afterSpin.value,
+		MinSizeBytes:   a.start.minSizeBytes(),
+		MaxSizeBytes:   a.start.maxSizeBytes(),
+		ExcludeGlobs:   search.SplitExcludePatterns(a.start.excludeEntry.Text),
 	}
 }
 
@@ -59,15 +59,23 @@ func (a *App) startSearch() {
 	}
 	a.netEng.Mounts.UnmountAll(context.Background()) // drop any mounts from a previous search before starting a new one
 
-	if a.builder.contentEnabled.Checked {
-		a.cfg.Recent.AddContentPattern(a.builder.contentCombo.Text)
-		a.builder.contentCombo.SetOptions(a.cfg.Recent.ContentPatterns)
+	if a.start.contentEnabled.Checked {
+		a.cfg.Recent.AddContentPattern(a.start.contentCombo.Text)
+		a.start.contentCombo.SetOptions(a.cfg.Recent.ContentPatterns)
 	}
 
 	a.searchResults = nil
 	a.results.clear()
 	a.start.view.clear()
-	a.tabs.SelectIndex(tabIndexResults)
+	// Only jump to Detailed Results when the search was started from
+	// somewhere that has no results view of its own (Workspace Builder's
+	// own Search button, currently the only other case) -- the Start tab
+	// has its own live Result Preview now, so searching from there used to
+	// yank the user over to Detailed Results with no way back to Start
+	// short of the tab bar, for no benefit.
+	if a.tabs.SelectedIndex() != tabIndexStart {
+		a.tabs.SelectIndex(tabIndexResults)
+	}
 
 	locOpts := a.locations.locationOptions()
 	base := a.searchOptionsTemplate()
@@ -158,9 +166,9 @@ func groupTermMatches(matches []cache.TermMatch, filenameRe *regexp.Regexp) []mo
 	return out
 }
 
-// restoreLastSearch pre-fills the Search Builder's filename pattern,
-// pre-checks the Workspace Builder tree, and repopulates the Results tab
-// with whatever the most recently completed search found, all loaded from
+// restoreLastSearch pre-fills the Start tab's filename pattern, pre-checks
+// the Workspace Builder tree, and repopulates the Results tab with
+// whatever the most recently completed search found, all loaded from
 // config -- so "View All Results" from the Start tab's Recent Results
 // isn't empty on a fresh launch just because no search has run yet this
 // session. RecentResults persists match content too (see
@@ -168,10 +176,10 @@ func groupTermMatches(matches []cache.TermMatch, filenameRe *regexp.Regexp) []mo
 // context a fresh search would, not just its path/size/date.
 func (a *App) restoreLastSearch() {
 	if a.cfg.Recent.LastFilePattern != "" {
-		a.builder.fileEntry.SetText(a.cfg.Recent.LastFilePattern)
+		a.start.fileEntry.SetText(a.cfg.Recent.LastFilePattern)
 	}
 	if len(a.cfg.Recent.ContentPatterns) > 0 {
-		a.builder.contentCombo.SetText(a.cfg.Recent.ContentPatterns[0])
+		a.start.contentCombo.SetText(a.cfg.Recent.ContentPatterns[0])
 	}
 	a.locations.restoreCheckedPaths(a.cfg.Recent.Paths)
 
@@ -198,9 +206,9 @@ func (a *App) restoreLastSearch() {
 	}
 
 	// The Start tab's own build() already ran a refresh() before this
-	// method had a chance to apply any of the above, so its quick
-	// fields/location summary would otherwise show stale pre-restore
-	// defaults until the user did something to trigger a redraw.
+	// method had a chance to apply restoreCheckedPaths above, so its
+	// location summary would otherwise show a stale pre-restore default
+	// until the user did something to trigger a redraw.
 	a.start.refresh()
 }
 

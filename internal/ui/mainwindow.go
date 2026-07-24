@@ -4,6 +4,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -53,8 +54,7 @@ func (t toolbarWidgetItem) ToolbarObject() fyne.CanvasObject { return t.obj }
 
 func (a *App) buildMainWindow() {
 	// Constructed (and built) in dependency order: startTab.build() reads
-	// widget state from builder/locations, so those must already be built.
-	a.builder = newSearchBuilderTab(a)
+	// widget state from locations, so that must already be built.
 	a.locations = newLocationsTab(a)
 	a.results = newResultsTab(a)
 	a.favTab = newFavoritesTab(a)
@@ -62,7 +62,6 @@ func (a *App) buildMainWindow() {
 	a.start = newStartTab(a)
 	a.commonTerms = newCommonTermsTab(a)
 
-	builderContent := a.builder.build()
 	locationsContent := a.locations.build()
 	resultsContent := a.results.build()
 	favContent := a.favTab.build()
@@ -71,12 +70,14 @@ func (a *App) buildMainWindow() {
 	commonTermsContent := a.commonTerms.build()
 
 	// Visual tab order (independent of the build order above). Icons make
-	// these read unambiguously as tabs rather than plain text links.
+	// these read unambiguously as tabs rather than plain text links. There
+	// used to be a separate "Search Builder" tab here, between Start and
+	// Workspace Builder -- its fields now live directly on the Start tab
+	// (see starttab.go's own doc comment), so it's gone.
 	startItem := container.NewTabItemWithIcon("Start", theme.HomeIcon(), startContent)
 	commonTermsItem := container.NewTabItemWithIcon("Common Search Terms", theme.HistoryIcon(), commonTermsContent)
 	a.tabs = container.NewAppTabs(
 		startItem,
-		container.NewTabItemWithIcon("Search Builder", theme.SearchIcon(), builderContent),
 		container.NewTabItemWithIcon("Workspace Builder", theme.StorageIcon(), locationsContent),
 		container.NewTabItemWithIcon("Detailed Results", theme.ListIcon(), resultsContent),
 		container.NewTabItemWithIcon("Favorite Results", theme.DocumentIcon(), favContent),
@@ -101,7 +102,14 @@ func (a *App) buildMainWindow() {
 	a.progressBar.Hide()
 	a.bottomStopBtn = widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), func() { a.stopSearch() })
 	a.bottomStopBtn.Hide()
-	progressRow := container.NewBorder(nil, nil, nil, a.bottomStopBtn, a.progressBar)
+	// Left-aligned at its own natural width, not stretched to the window's
+	// full width: a progress bar reads as a bar precisely because it's a
+	// bounded track that fills up, and stretching it edge to edge on every
+	// launch (even before a search has run) exaggerated it into a big,
+	// mostly-empty-looking strip for no reason -- HBox gives it just
+	// enough room for itself and the Stop button, with the spacer
+	// absorbing the rest instead of the progress bar itself.
+	progressRow := container.NewHBox(a.progressBar, a.bottomStopBtn, layout.NewSpacer())
 
 	toolbar := a.buildToolbar()
 
@@ -122,10 +130,8 @@ func (a *App) buildMainWindow() {
 }
 
 // applyThemeChange persists the theme's current accent color and dark/light
-// mode, re-applies the theme (Fyne re-queries every widget's colors when
-// the same theme instance is re-set, so this takes effect immediately
-// without a restart), and keeps the toolbar background rectangle in sync.
-// Called after any change to a.theme's accent or dark/light mode.
+// mode, re-applies the theme, and keeps the toolbar background rectangle in
+// sync. Called after any change to a.theme's accent or dark/light mode.
 func (a *App) applyThemeChange() {
 	a.cfg.AccentColor = a.theme.AccentHex()
 	if a.theme.dark {
@@ -136,7 +142,22 @@ func (a *App) applyThemeChange() {
 	a.cfg.Save()
 	a.toolbarBg.FillColor = a.theme.accent
 	a.toolbarBg.Refresh()
+	for _, backdrop := range a.boxedCardBackdrops {
+		backdrop.FillColor = boxedCardBackdropColor(a)
+		backdrop.Refresh()
+	}
 	a.fyneApp.Settings().SetTheme(a.theme)
+	// Settings.SetTheme notifies listeners over a channel that's a
+	// non-blocking send with a goroutine fallback (see Fyne's
+	// app/settings.go apply()) -- if that channel isn't immediately ready,
+	// the notification (and the resulting widget recolor) lands on some
+	// later tick instead of this one, not necessarily before the current
+	// frame renders. The visible symptom was the dark/light toggle needing
+	// two clicks: the first click's redraw only actually caught up once
+	// the second click's own frame rendered. Refreshing the whole content
+	// tree here forces every widget to redraw against the new theme
+	// immediately, without waiting on that notification to arrive.
+	a.win.Content().Refresh()
 }
 
 // toggleThemeMode flips between dark and light mode -- the toolbar's
