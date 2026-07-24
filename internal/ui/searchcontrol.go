@@ -30,22 +30,36 @@ func (a *App) currentContentRegex() *regexp.Regexp {
 	return re
 }
 
+// tildeBackupGlob matches the standard Unix/Emacs backup-file convention
+// (a trailing "~", as in "notes.txt~" or the plain "notes.txt.~3~" numbered
+// form) -- reused as an ordinary ExcludeGlobs entry rather than a new engine
+// field, since filepath.Match's "*~" already expresses it exactly.
+const tildeBackupGlob = "*~"
+
 // searchOptionsTemplate builds the pattern/filter half of search.Options
 // from the Start tab's search fields; Dir and ExcludeDirs are filled in per
 // resolved root.
 func (a *App) searchOptionsTemplate() search.Options {
+	excludeGlobs := search.SplitExcludePatterns(a.start.excludeEntry.Text)
+	if a.start.excludeTildeCheck.Checked {
+		excludeGlobs = append(excludeGlobs, tildeBackupGlob)
+	}
 	return search.Options{
 		FilePattern:    a.start.fileEntry.Text,
 		ContentPattern: a.start.contentCombo.Text,
 		ContentEnabled: a.start.contentEnabled.Checked,
 		Recursive:      a.start.recursiveCheck.Checked,
 		CaseSensitive:  a.start.caseCheck.Checked,
-		IncludeHidden:  a.start.hiddenCheck.Checked,
-		ContextBefore:  a.start.beforeSpin.value,
-		ContextAfter:   a.start.afterSpin.value,
-		MinSizeBytes:   a.start.minSizeBytes(),
-		MaxSizeBytes:   a.start.maxSizeBytes(),
-		ExcludeGlobs:   search.SplitExcludePatterns(a.start.excludeEntry.Text),
+		// Inverted from the checkbox's own state: excludeHiddenCheck
+		// defaults unchecked, meaning hidden files are included by
+		// default now (see the field's own doc comment in starttab.go for
+		// why that's a deliberate reversal of this app's old default).
+		IncludeHidden: !a.start.excludeHiddenCheck.Checked,
+		ContextBefore: a.start.beforeSpin.value,
+		ContextAfter:  a.start.afterSpin.value,
+		MinSizeBytes:  a.start.minSizeBytes(),
+		MaxSizeBytes:  a.start.maxSizeBytes(),
+		ExcludeGlobs:  excludeGlobs,
 	}
 }
 
@@ -429,4 +443,33 @@ func searchCompleteText(found int, canceled bool) string {
 // openResult opens a search result's file with the OS default handler.
 func (a *App) openResult(path string) error {
 	return fsutil.OpenPath(path)
+}
+
+// removeSearchResult drops path from the shared result set (see
+// resultsview.go's buildCard doc comment: every view's own order is a set
+// of indices into this same slice) and rebuilds every view over it, so
+// deleting a file from the Actions menu makes it disappear from the
+// results list immediately instead of lingering until the next search.
+// resort() -- not a targeted splice on each view's own order -- because
+// removing an entry shifts every later index, and resort() already
+// rebuilds order from scratch and re-resolves the current selection
+// against it (falling back cleanly if the deleted file was the one
+// selected).
+func (a *App) removeSearchResult(path string) {
+	a.searchResults = removeResultByPath(a.searchResults, path)
+	a.results.resort()
+	a.start.view.resort()
+}
+
+// removeResultByPath returns results with the first entry whose Path
+// matches removed, preserving the order of the rest (a no-op if nothing
+// matches). Split out from removeSearchResult so this part is testable
+// without a live resultsView (resort() needs built widgets).
+func removeResultByPath(results []model.FileResult, path string) []model.FileResult {
+	for i, r := range results {
+		if r.Path == path {
+			return append(results[:i], results[i+1:]...)
+		}
+	}
+	return results
 }

@@ -197,7 +197,7 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	actionsBtn.Importance = widget.LowImportance
 	actionsBtn.OnTapped = func() {
 		rec := fileRecord{Path: res.Path, Name: res.Name, ModifiedStr: formatModTime(res.ModTime), Size: res.Size, SizeHuman: formatSize(res.Size)}
-		menu := v.app.fileContextMenu(rec, nil)
+		menu := v.app.fileContextMenu(rec, nil, func() { v.app.removeSearchResult(res.Path) })
 		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(actionsBtn)
 		pos = pos.Add(fyne.NewPos(0, actionsBtn.Size().Height))
 		widget.ShowPopUpMenuAtPosition(menu, v.app.win.Canvas(), pos)

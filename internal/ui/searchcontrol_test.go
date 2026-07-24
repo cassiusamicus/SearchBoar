@@ -5,8 +5,101 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2/widget"
+
 	"codeberg.org/cassiusamicus/Utilities/internal/cache"
+	"codeberg.org/cassiusamicus/Utilities/internal/model"
 )
+
+func TestRemoveResultByPathRemovesOnlyTheMatchingEntry(t *testing.T) {
+	results := []model.FileResult{
+		{FileEntry: model.FileEntry{Path: "/a.txt"}},
+		{FileEntry: model.FileEntry{Path: "/b.txt"}},
+		{FileEntry: model.FileEntry{Path: "/c.txt"}},
+	}
+
+	got := removeResultByPath(results, "/b.txt")
+	if len(got) != 2 {
+		t.Fatalf("got %d results, want 2", len(got))
+	}
+	if got[0].Path != "/a.txt" || got[1].Path != "/c.txt" {
+		t.Errorf("got %+v, want [/a.txt /c.txt] (order preserved, /b.txt gone)", got)
+	}
+}
+
+func TestRemoveResultByPathNoMatchIsNoOp(t *testing.T) {
+	results := []model.FileResult{{FileEntry: model.FileEntry{Path: "/a.txt"}}}
+	got := removeResultByPath(results, "/not-there.txt")
+	if len(got) != 1 || got[0].Path != "/a.txt" {
+		t.Errorf("got %+v, want the input unchanged", got)
+	}
+}
+
+// newTestStartTabForOptions builds just enough of a startTab's widgets for
+// searchOptionsTemplate to read from, without running build() (which needs
+// a real app/window) -- the fields it doesn't touch are left at their zero
+// value.
+func newTestStartTabForOptions() *startTab {
+	return &startTab{
+		fileEntry:          widget.NewEntry(),
+		contentCombo:       widget.NewSelectEntry(nil),
+		contentEnabled:     widget.NewCheck("", nil),
+		recursiveCheck:     widget.NewCheck("", nil),
+		caseCheck:          widget.NewCheck("", nil),
+		excludeHiddenCheck: widget.NewCheck("", nil),
+		excludeTildeCheck:  widget.NewCheck("", nil),
+		beforeSpin:         newIntSpinner(0, 10, 0),
+		afterSpin:          newIntSpinner(0, 10, 0),
+		minSizeEntry:       widget.NewEntry(),
+		maxSizeEntry:       widget.NewEntry(),
+		excludeEntry:       widget.NewEntry(),
+	}
+}
+
+// TestSearchOptionsTemplateIncludesHiddenAndTildeFilesByDefault guards the
+// reversed default: excludeHiddenCheck/excludeTildeCheck start unchecked,
+// so a fresh search includes hidden and ~ backup files unless the user
+// opts into excluding them -- the opposite of this app's old
+// "Include hidden files" default.
+func TestSearchOptionsTemplateIncludesHiddenAndTildeFilesByDefault(t *testing.T) {
+	a := &App{start: newTestStartTabForOptions()}
+	opts := a.searchOptionsTemplate()
+	if !opts.IncludeHidden {
+		t.Error("IncludeHidden = false, want true (hidden files included by default)")
+	}
+	for _, g := range opts.ExcludeGlobs {
+		if g == tildeBackupGlob {
+			t.Errorf("ExcludeGlobs = %v, want no %q entry when excludeTildeCheck is unchecked", opts.ExcludeGlobs, tildeBackupGlob)
+		}
+	}
+}
+
+// TestSearchOptionsTemplateExcludesHiddenAndTildeFilesWhenChecked guards
+// the opt-in direction: checking either box should actually exclude that
+// category, not just flip a field nothing reads.
+func TestSearchOptionsTemplateExcludesHiddenAndTildeFilesWhenChecked(t *testing.T) {
+	start := newTestStartTabForOptions()
+	// Set the field directly, not SetChecked -- SetChecked triggers a
+	// widget Refresh, which needs a running Fyne app/window context this
+	// standalone unit test doesn't have.
+	start.excludeHiddenCheck.Checked = true
+	start.excludeTildeCheck.Checked = true
+	a := &App{start: start}
+
+	opts := a.searchOptionsTemplate()
+	if opts.IncludeHidden {
+		t.Error("IncludeHidden = true, want false when excludeHiddenCheck is checked")
+	}
+	found := false
+	for _, g := range opts.ExcludeGlobs {
+		if g == tildeBackupGlob {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("ExcludeGlobs = %v, want it to include %q when excludeTildeCheck is checked", opts.ExcludeGlobs, tildeBackupGlob)
+	}
+}
 
 func TestGroupTermMatchesGroupsConsecutiveRowsByPath(t *testing.T) {
 	now := time.Now()

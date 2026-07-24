@@ -15,7 +15,12 @@ import (
 // fileContextMenu builds the right-click menu shared by the Details file
 // table and the Overview card list: Open in default program, Open with...,
 // Show in file manager, Copy path, Add/Remove Favorite, Delete file.
-func (a *App) fileContextMenu(rec fileRecord, onChanged func()) *fyne.Menu {
+// onChanged fires after a favorite is added/removed; onDeleted fires
+// separately after the file itself is actually deleted from disk -- kept
+// distinct so a caller that only cares about one (resultsview.go only
+// needs to know about deletions, to drop the file from the results list)
+// doesn't have to guess which kind of change just happened.
+func (a *App) fileContextMenu(rec fileRecord, onChanged, onDeleted func()) *fyne.Menu {
 	items := []*fyne.MenuItem{
 		fyne.NewMenuItem("Open in default program", func() {
 			if err := fsutil.OpenPath(rec.Path); err != nil {
@@ -67,8 +72,8 @@ func (a *App) fileContextMenu(rec fileRecord, onChanged func()) *fyne.Menu {
 					return
 				}
 				a.setStatus("Deleted " + rec.Path)
-				if onChanged != nil {
-					onChanged()
+				if onDeleted != nil {
+					onDeleted()
 				}
 			}, a.win)
 	}))

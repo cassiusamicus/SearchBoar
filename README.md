@@ -39,15 +39,21 @@ result tabs — there's no separate "network search mode" with its own
 glob patterns, the way the original two apps worked.
 
 - **Start tab**: the app's one search page, laid out in two columns with a
-  draggable divider between them. Left: a Search card with everything a
+  draggable divider between them, each section (Search Command/Search
+  Location/Result Preview) given a shaded, bordered box so they read as
+  distinct at a glance. Left: a Search Command card with everything a
   search needs -- file-type quick filters, Files/Containing regex fields
-  (each with a graphical regex-builder wizard), Search Now, a Saved
-  Searches quick-select, and Options/Context Lines/File Size Filter/Exclude
-  Patterns/Search Help below that -- then a Location card (a link to
-  Workspace Builder for anything more elaborate, a Saved Workspaces
-  quick-select, and a full line-by-line list of every selected local root
-  and checked SMB/NFS share, not just a truncated one-line summary), then
-  Clear History. Right: your most recent search hits as full cards with
+  (each with a graphical regex-builder wizard), Exclude hidden files/
+  Exclude ~ backup files checkboxes (both unchecked by default -- hidden
+  and Unix/Emacs-style `~` backup files are included unless you opt into
+  excluding them), Search Now, a Saved Searches quick-select, and Clear
+  History, then Options/Context Lines/File Size Filter/Exclude Patterns/
+  Search Help tucked behind a collapsed-by-default "Advanced Options"
+  disclosure -- then a Search Location card (a link to Workspace Builder
+  for anything more elaborate, a Saved Workspaces quick-select, and a full
+  line-by-line list of every selected local root and checked SMB/NFS
+  share, not just a truncated one-line summary). Right: your most recent
+  search hits as full cards with
   Prev/Next, the same live view Detailed Results shows just laid out
   compactly, with its own sort dropdown (Number of Hits/Name/Location/
   Modified/Size) and jump-to-first/jump-to-last buttons alongside the nav

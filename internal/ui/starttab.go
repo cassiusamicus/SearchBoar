@@ -72,7 +72,13 @@ type startTab struct {
 
 	recursiveCheck *widget.Check
 	caseCheck      *widget.Check
-	hiddenCheck    *widget.Check
+
+	// excludeHiddenCheck/excludeTildeCheck default unchecked -- hidden files
+	// and ~ backup files are included unless explicitly excluded, the
+	// opposite of this app's old default (hidden files were silently
+	// skipped unless you opted in via an "Include hidden files" checkbox).
+	excludeHiddenCheck *widget.Check
+	excludeTildeCheck  *widget.Check
 
 	beforeSpin *intSpinner
 	afterSpin  *intSpinner
@@ -190,11 +196,19 @@ func (t *startTab) build() fyne.CanvasObject {
 	t.savedSearchSelect.PlaceHolder = "Saved Searches..."
 	t.refreshSavedSearches()
 
+	// Promoted out of Advanced Options onto the main Search Command body --
+	// there's room here now that the old Results list is gone, and these
+	// two are common enough to want visible without an extra click to
+	// reveal them, unlike the rest of Options/Context Lines/File Size
+	// Filter/Exclude Patterns below.
+	t.excludeHiddenCheck = widget.NewCheck("Exclude hidden files", nil)
+	t.excludeTildeCheck = widget.NewCheck("Exclude ~ backup files", nil)
+	excludeQuickRow := container.NewHBox(t.excludeHiddenCheck, t.excludeTildeCheck)
+
 	t.recursiveCheck = widget.NewCheck("Search in subdirectories", nil)
 	t.recursiveCheck.SetChecked(true)
 	t.caseCheck = widget.NewCheck("Case sensitive", nil)
-	t.hiddenCheck = widget.NewCheck("Include hidden files", nil)
-	optionsRow := container.NewHBox(t.recursiveCheck, t.caseCheck, t.hiddenCheck)
+	optionsRow := container.NewHBox(t.recursiveCheck, t.caseCheck)
 
 	t.beforeSpin = newIntSpinner(0, 10, 2)
 	t.afterSpin = newIntSpinner(0, 10, 2)
@@ -214,7 +228,16 @@ func (t *startTab) build() fyne.CanvasObject {
 
 	t.excludeEntry = widget.NewEntry()
 	t.excludeEntry.SetPlaceHolder("e.g., *.pyc,*.o,*.tmp")
-	excludeCard := widget.NewCard("Exclude Patterns (glob, comma-separated)", "", t.excludeEntry)
+	// "Glob" and "comma-separated" meant nothing without an example --
+	// spelled out here instead of just in the card title, matching the
+	// secondary-text styling used for result-card metadata elsewhere (see
+	// resultsview.go's buildCard).
+	excludeHint := widget.NewLabel("Skip files/folders by name: * matches any run of characters, ? matches exactly one -- not a content search pattern. List more than one separated by commas, e.g. *.pyc,*.bak,node_modules")
+	excludeHint.Wrapping = fyne.TextWrapWord
+	excludeHint.Importance = widget.MediumImportance
+	excludeHint.SizeName = theme.SizeNameCaptionText
+	excludeHint.TextStyle = fyne.TextStyle{Italic: true}
+	excludeCard := widget.NewCard("Exclude Patterns", "", container.NewVBox(excludeHint, t.excludeEntry))
 
 	// Options/Context Lines/File Size Filter stacked, not side by side: the
 	// Search Builder tab (where these came from) had a whole tab's width to
@@ -257,6 +280,7 @@ func (t *startTab) build() fyne.CanvasObject {
 		widget.NewLabel("File Types:"), typeRow,
 		filesRow,
 		containingRow,
+		excludeQuickRow,
 		container.NewHBox(searchNowBtn, t.savedSearchSelect, clearBtn),
 		advanced,
 	), false)

@@ -6,6 +6,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"codeberg.org/cassiusamicus/Utilities/internal/config"
@@ -143,7 +145,38 @@ func (t *favoritesTab) updateNode(uid widget.TreeNodeID, branch bool, box *tappa
 		text += "  —  " + item.SearchTerm
 	}
 	text += "  —  " + item.Modified + "  —  " + item.SizeHuman
-	box.SetObjects([]fyne.CanvasObject{widget.NewLabel(text)})
+	label := widget.NewLabel(text)
+
+	// Same Open/Actions buttons as the Result Preview cards (see
+	// resultsview.go's buildCard), not just the double-click-to-open and
+	// right-click-for-menu this row already had -- those work but don't
+	// show themselves, so there was previously no visible way to discover
+	// either from just looking at the tree.
+	openBtn := widget.NewButtonWithIcon("Open", theme.MediaPlayIcon(), func() {
+		if err := t.app.openResult(item.Filepath); err != nil {
+			t.app.setStatus("Failed to open: " + err.Error())
+		}
+	})
+	openBtn.Importance = widget.LowImportance
+	actionsBtn := widget.NewButtonWithIcon("Actions", theme.MoreVerticalIcon(), nil)
+	actionsBtn.Importance = widget.LowImportance
+	actionsBtn.OnTapped = func() {
+		menu := t.favoriteContextMenu(item)
+		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(actionsBtn)
+		pos = pos.Add(fyne.NewPos(0, actionsBtn.Size().Height))
+		widget.ShowPopUpMenuAtPosition(menu, t.app.win.Canvas(), pos)
+	}
+
+	// A spacer, not a Border-wrapped row: tappableBox's own content is a
+	// plain HBox (every child laid out at its natural MinSize -- see
+	// layout.NewHBoxLayout's doc comment), which would leave a
+	// Border-wrapped row sized to its own minimum and the buttons sitting
+	// right after the label instead of at the row's true right edge.
+	// HBoxLayout gives a Spacer child special treatment, expanding it to
+	// absorb whatever width Tree gives this row beyond the label/buttons'
+	// own minimum -- the same mechanism resultsview.go's navHeader uses to
+	// push its count label to the right.
+	box.SetObjects([]fyne.CanvasObject{label, layout.NewSpacer(), openBtn, actionsBtn})
 	box.OnDoubleTapped = func() {
 		if err := t.app.openResult(item.Filepath); err != nil {
 			t.app.setStatus("Failed to open: " + err.Error())
