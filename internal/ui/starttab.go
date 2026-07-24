@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -41,13 +42,12 @@ var fileTypeOrder = []string{"ALL", "MD", "ORG", "TXT", "HTML", "PDF", "DOCX"}
 // is the only other tab left for anything not simple enough to fit here
 // (the drive/share tree).
 //
-// The left column is devoted to Search, Location, and Clear History --
-// what to search for, where, and the one housekeeping action that doesn't
-// belong to either. It used to also carry a compact filename list of
-// recent results, but that duplicated the right column's full cards
-// without adding anything a quick glance needed, so it's gone, and
-// Location's one-line summary expanded to the full list of selected
-// roots/shares in its place (see locationSummary).
+// The left column is devoted to Search Command and Search Locations --
+// what to search for and where. It used to also carry a compact filename
+// list of recent results, but that duplicated the right column's full
+// cards without adding anything a quick glance needed, so it's gone, and
+// Search Locations expanded into Included Paths/Excluded Paths sections in
+// its place (see includedLocationLines/excludedLocationLines).
 //
 // The results panel is the same cards+Prev/Next resultsView the Detailed
 // Results tab uses (see resultsview.go), just laid out compactly, filling
@@ -58,17 +58,22 @@ var fileTypeOrder = []string{"ALL", "MD", "ORG", "TXT", "HTML", "PDF", "DOCX"}
 type startTab struct {
 	app *App
 
-	locationLabel     *widget.Label
-	savedSearchSelect *widget.Select
-	workspaceSelect   *widget.Select
-	view              *resultsView
+	includedPathsLabel *widget.Label
+	excludedPathsLabel *widget.Label
+	savedSearchSelect  *widget.Select
+	workspaceSelect    *widget.Select
+	view               *resultsView
 
-	fileTypeChecks map[string]*widget.Check
-	updatingTypes  bool
+	fileTypeChecks   map[string]*widget.Check
+	updatingTypes    bool
+	fileTypesSummary *widget.Entry
+	// otherExtensions lets someone add a type the checkboxes don't cover
+	// without writing regex -- a plain list of extensions (comma or |
+	// separated, leading dot optional), parsed by customExtensions.
+	otherExtensions *widget.Entry
 
-	fileEntry      *widget.Entry
-	contentEnabled *widget.Check
-	contentCombo   *widget.SelectEntry
+	fileEntry    *widget.Entry
+	contentCombo *widget.SelectEntry
 
 	recursiveCheck *widget.Check
 	caseCheck      *widget.Check
@@ -155,11 +160,31 @@ func newStartTab(a *App) *startTab {
 }
 
 func (t *startTab) build() fyne.CanvasObject {
-	// fileEntry must exist before any checkbox fires onFileTypeToggled
-	// (which writes into it), so create it before wiring the checkboxes.
+	// fileEntry and fileTypesSummary must both exist before any checkbox
+	// fires onFileTypeToggled (which writes into them), so create both
+	// before wiring the checkboxes -- including before the "ALL"
+	// checkbox's own SetChecked(true) below, which fires its OnChanged
+	// synchronously (see widget.Check.SetChecked).
 	t.fileEntry = widget.NewEntry()
 	t.fileEntry.SetText(".*")
 	t.fileEntry.SetPlaceHolder(`e.g., *.py or .*(\.c|\.h)$`)
+
+	// Consolidated behind a Type Wizard popup, like Files/Containing's own
+	// Expr. Wizard buttons, instead of seven checkboxes permanently taking
+	// up their own row -- the summary field mirrors what those two rows
+	// already do (show the resolved selection, edit it via a popup), so
+	// File Types reads as the same kind of row instead of a visibly
+	// different control.
+	t.fileTypesSummary = widget.NewEntry()
+	t.fileTypesSummary.Disable()
+
+	// otherExtensions must also exist before the checkbox loop below, for
+	// the same reason fileEntry/fileTypesSummary do (see the comment
+	// above them): SetChecked(true) on "ALL" fires synchronously and ends
+	// up reading this field via applyFileTypeSelection.
+	t.otherExtensions = widget.NewEntry()
+	t.otherExtensions.SetPlaceHolder("e.g. xls, doc, odt")
+	t.otherExtensions.OnChanged = t.onOtherExtensionsChanged
 
 	typeRow := container.NewHBox()
 	for _, name := range fileTypeOrder {
@@ -170,6 +195,24 @@ func (t *startTab) build() fyne.CanvasObject {
 	}
 	t.fileTypeChecks["ALL"].SetChecked(true)
 
+	typeWizardBtn := widget.NewButton("Type Wizard", func() {
+		// These seven checkboxes cover the common cases; for anything
+		// else, a plain list of extensions here does the same job the
+		// checkboxes do -- no regex, no punctuation to get right beyond
+		// commas or |.
+		otherHelp := widget.NewLabel("Other extensions -- separate with a comma or |, dot optional (xls, doc or .xls|.doc both work):")
+		otherHelp.Wrapping = fyne.TextWrapWord
+		otherHelp.Importance = widget.MediumImportance
+		otherHelp.SizeName = theme.SizeNameCaptionText
+		otherHelp.TextStyle = fyne.TextStyle{Italic: true}
+
+		content := container.NewVBox(typeRow, widget.NewSeparator(), otherHelp, t.otherExtensions)
+		d := dialog.NewCustom("File Types", "Close", content, t.app.win)
+		d.Resize(fyne.NewSize(420, 230))
+		d.Show()
+	})
+	fileTypesRow := container.NewBorder(nil, nil, widget.NewLabel("File Types:"), typeWizardBtn, t.fileTypesSummary)
+
 	fileWizardBtn := widget.NewButton("Expr. Wizard", func() {
 		showRegexBuilderDialog(t.app.win, "File Name Pattern Builder", t.fileEntry.Text, func(pattern string) {
 			t.fileEntry.SetText(pattern)
@@ -177,8 +220,12 @@ func (t *startTab) build() fyne.CanvasObject {
 	})
 	filesRow := container.NewBorder(nil, nil, widget.NewLabel("File Names:"), fileWizardBtn, t.fileEntry)
 
-	t.contentEnabled = widget.NewCheck("", nil)
-	t.contentEnabled.SetChecked(true)
+	// No enable/disable checkbox: a blank Containing field already means
+	// "just search filenames" (search.Options.ContentEnabled is always
+	// true from here on -- the engine itself only actually runs a content
+	// search when the pattern is non-blank, see engine.go), so a separate
+	// checkbox to convey the same thing was one more control saying
+	// nothing the blank field didn't already say on its own.
 	t.contentCombo = widget.NewSelectEntry(t.app.cfg.Recent.ContentPatterns)
 	t.contentCombo.SetPlaceHolder("Text or regex to search for in files")
 	t.contentCombo.OnSubmitted = func(string) { t.searchNow() }
@@ -187,8 +234,7 @@ func (t *startTab) build() fyne.CanvasObject {
 			t.contentCombo.SetText(pattern)
 		})
 	})
-	containingRow := container.NewBorder(nil, nil,
-		container.NewHBox(widget.NewLabel("Containing:"), t.contentEnabled), contentWizardBtn, t.contentCombo)
+	containingRow := container.NewBorder(nil, nil, widget.NewLabel("Containing:"), contentWizardBtn, t.contentCombo)
 
 	searchNowBtn := widget.NewButtonWithIcon("Search Now", theme.SearchIcon(), func() { t.searchNow() })
 	searchNowBtn.Importance = widget.HighImportance
@@ -276,17 +322,22 @@ func (t *startTab) build() fyne.CanvasObject {
 	// full-width row below everything -- it's a one-off housekeeping
 	// action, not something that needs a whole row's worth of visual
 	// weight to itself.
+	// Containing first (the primary "what am I looking for" field), then
+	// File Names, then File Types/Exclude/Advanced Options -- what to
+	// search for comes before how to narrow it down.
 	searchCard := boxedCard(t.app, "Search Command", container.NewVBox(
-		widget.NewLabel("File Types:"), typeRow,
-		filesRow,
 		containingRow,
+		filesRow,
+		fileTypesRow,
 		excludeQuickRow,
 		container.NewHBox(searchNowBtn, t.savedSearchSelect, clearBtn),
 		advanced,
 	), false)
 
-	t.locationLabel = widget.NewLabel("")
-	t.locationLabel.Wrapping = fyne.TextWrapWord
+	t.includedPathsLabel = widget.NewLabel("")
+	t.includedPathsLabel.Wrapping = fyne.TextWrapWord
+	t.excludedPathsLabel = widget.NewLabel("")
+	t.excludedPathsLabel.Wrapping = fyne.TextWrapWord
 	browseBtn := widget.NewButton("Browse for Folder", func() { t.quickBrowse() })
 	openLocationsBtn := widget.NewButton("Workspace Builder  →", func() {
 		t.app.tabs.SelectIndex(tabIndexLocations)
@@ -294,8 +345,18 @@ func (t *startTab) build() fyne.CanvasObject {
 	t.workspaceSelect = widget.NewSelect(nil, func(name string) { t.selectWorkspace(name) })
 	t.workspaceSelect.PlaceHolder = "Saved Workspaces..."
 	t.refreshWorkspaces()
-	locationCard := boxedCard(t.app, "Search Location", container.NewVBox(
-		t.locationLabel,
+	// Two sections, not one combined summary: Included Paths (checked
+	// local roots -- shown with the same friendly drive names the
+	// Workspace Builder tree itself uses, not raw mount paths, plus any
+	// checked SMB/NFS shares) and Excluded Paths (subfolders explicitly
+	// unchecked underneath an otherwise-included root) -- separating them
+	// makes it obvious at a glance which subfolders of an included drive
+	// were deliberately carved out, instead of that only being visible by
+	// reading every line closely.
+	locationCard := boxedCard(t.app, "Search Locations", container.NewVBox(
+		widget.NewLabel("Included Paths:"), t.includedPathsLabel,
+		widget.NewSeparator(),
+		widget.NewLabel("Excluded Paths:"), t.excludedPathsLabel,
 		container.NewHBox(browseBtn, openLocationsBtn, t.workspaceSelect),
 	), false)
 
@@ -327,6 +388,17 @@ func (t *startTab) build() fyne.CanvasObject {
 		t.view.resort()
 	}
 
+	// One content block per file instead of one per hit, for files with
+	// many matches each -- toggling rebuilds every card (via resort(), the
+	// same "rebuild everything, keep the current file selected" path a
+	// sort-order change already uses), so the inner Back/Forward stepper,
+	// which also reads through matchesOf, immediately agrees with what's
+	// actually rendered.
+	firstOnlyCheck := widget.NewCheck("Show first result only", func(v bool) {
+		t.view.showFirstMatchOnly = v
+		t.view.resort()
+	})
+
 	// Right column: nav buttons + count above the cards, mirroring Detailed
 	// Results' header (see its own comment for the outer/inner ordering).
 	// Sort controls and the jump-to-top/bottom buttons sit to the right of
@@ -337,7 +409,7 @@ func (t *startTab) build() fyne.CanvasObject {
 		widget.NewSeparator(),
 		widget.NewLabel("Sort by:"), sortSelect, dirBtn,
 		t.view.jumpTopBtn, t.view.jumpBottomBtn,
-		layout.NewSpacer(), t.view.countLabel,
+		layout.NewSpacer(), firstOnlyCheck, t.view.countLabel,
 	)
 	// Same boxedCard treatment as Search Command/Search Location, so all
 	// three of this tab's sections read as distinct, separated boxes at a
@@ -374,17 +446,20 @@ func searchHelpContent() fyne.CanvasObject {
 		"Common Searches\n" +
 			"• epicurus → finds this word anywhere\n" +
 			"• fat and sleek → exact phrase (words together)\n" +
-			"• Case sensitive → matches capitalization exactly")
+			"• Case sensitive → matches capitalization exactly\n" +
+			"• Need \"any of these words\", \"all of these words\", or " +
+			"two words near each other? Use the Expr. Wizard button next " +
+			"to this field -- it builds that for you, no regex needed.")
 	common.Wrapping = fyne.TextWrapWord
 	recipes := widget.NewLabel(
-		"Regex Recipes (optional)\n" +
-			"• fear|death → either word\n" +
-			"• (?s)(?=.*fat)(?=.*sleek) → both words anywhere in the file\n" +
-			"• fat.*sleek → words in this order (same line)\n" +
+		"Regex Recipes (optional, for hand-written patterns)\n" +
+			"• fear|death → either word (same as the wizard's \"Any of these words\")\n" +
+			"• fat.*sleek → words in this order, same line\n" +
 			`• \bfear\b → whole word only` + "\n" +
 			"• fear → partial match (inside other words too)\n" +
 			"• ^Epicurus → line begins with\n" +
-			"• pain$ → line ends with")
+			"• pain$ → line ends with\n" +
+			"A content match is checked one line at a time, so a pattern can't span two lines.")
 	recipes.Wrapping = fyne.TextWrapWord
 	// Stacked, not side by side: this used to sit in the Search Builder
 	// tab's own full-width tab, wide enough for two columns of text to sit
@@ -397,8 +472,11 @@ func searchHelpContent() fyne.CanvasObject {
 }
 
 // onFileTypeToggled reimplements the original app's checkbox interaction:
-// checking ALL clears the others; checking a specific type unchecks ALL and
-// combines every checked type into one filename regex.
+// checking ALL clears the others (and any custom extensions -- they're
+// just one more way of specifying "not ALL"); checking a specific type
+// unchecks ALL. The actual regen (File Names + fileTypesSummary) happens
+// in applyFileTypeSelection, shared with onOtherExtensionsChanged so both
+// inputs feed the same combined result.
 func (t *startTab) onFileTypeToggled(changed string) {
 	if t.updatingTypes {
 		return
@@ -411,27 +489,98 @@ func (t *startTab) onFileTypeToggled(changed string) {
 			for _, name := range fileTypeOrder[1:] {
 				t.fileTypeChecks[name].SetChecked(false)
 			}
-			t.fileEntry.SetText(".*")
+			t.otherExtensions.SetText("")
 		}
+		t.applyFileTypeSelection()
 		return
 	}
 
 	if t.fileTypeChecks[changed].Checked {
 		t.fileTypeChecks["ALL"].SetChecked(false)
 	}
+	t.applyFileTypeSelection()
+}
 
+// onOtherExtensionsChanged mirrors onFileTypeToggled for the free-form
+// extensions field: typing anything into it means "not ALL", the same as
+// checking a specific type checkbox does.
+func (t *startTab) onOtherExtensionsChanged(string) {
+	if t.updatingTypes {
+		return
+	}
+	if t.otherExtensions.Text != "" && t.fileTypeChecks["ALL"].Checked {
+		t.updatingTypes = true
+		t.fileTypeChecks["ALL"].SetChecked(false)
+		t.updatingTypes = false
+	}
+	t.applyFileTypeSelection()
+}
+
+// applyFileTypeSelection recomputes File Names and fileTypesSummary from
+// the current checkbox + custom-extensions state -- the single place both
+// onFileTypeToggled and onOtherExtensionsChanged funnel through, so the
+// two inputs can never disagree about what the combined result should be.
+func (t *startTab) applyFileTypeSelection() {
 	var parts []string
 	for _, name := range fileTypeOrder[1:] {
 		if t.fileTypeChecks[name].Checked {
 			parts = append(parts, fileTypeExtRegex[name])
 		}
 	}
+	for _, ext := range t.customExtensions() {
+		parts = append(parts, `\.`+regexp.QuoteMeta(ext))
+	}
+
 	if len(parts) == 0 {
 		t.fileTypeChecks["ALL"].SetChecked(true)
 		t.fileEntry.SetText(".*")
-		return
+	} else {
+		t.fileEntry.SetText(".*(" + strings.Join(parts, "|") + ")$")
 	}
-	t.fileEntry.SetText(".*(" + strings.Join(parts, "|") + ")$")
+	t.fileTypesSummary.SetText(t.fileTypesSummaryText())
+}
+
+// customExtensions parses the free-form "Other extensions" field into a
+// list of bare extensions -- no leading dot, no regex -- e.g.
+// "xls, .xlsx | odt" -> ["xls", "xlsx", "odt"]. Accepts commas or |
+// interchangeably as separators, and tolerates a leading dot on any entry
+// without requiring one, since asking someone who explicitly doesn't want
+// to deal with regex to also get punctuation exactly right defeats the
+// point of this field existing.
+func (t *startTab) customExtensions() []string {
+	if t.otherExtensions == nil || t.otherExtensions.Text == "" {
+		return nil
+	}
+	fields := strings.FieldsFunc(t.otherExtensions.Text, func(r rune) bool { return r == ',' || r == '|' })
+	var exts []string
+	for _, f := range fields {
+		ext := strings.TrimPrefix(strings.TrimSpace(f), ".")
+		if ext != "" {
+			exts = append(exts, ext)
+		}
+	}
+	return exts
+}
+
+// fileTypesSummaryText renders the current file-type checkbox selection
+// plus any custom extensions as a short comma list ("MD, TXT, xls") for
+// the read-only summary field, or "All types" when ALL is checked (or,
+// equivalently, nothing else is).
+func (t *startTab) fileTypesSummaryText() string {
+	if t.fileTypeChecks["ALL"].Checked {
+		return "All types"
+	}
+	var names []string
+	for _, name := range fileTypeOrder[1:] {
+		if t.fileTypeChecks[name].Checked {
+			names = append(names, name)
+		}
+	}
+	names = append(names, t.customExtensions()...)
+	if len(names) == 0 {
+		return "All types"
+	}
+	return strings.Join(names, ", ")
 }
 
 func (t *startTab) minSizeBytes() int64 {
@@ -480,10 +629,18 @@ func (s *intSpinner) set(v int) {
 // (fileEntry/contentCombo/etc.) need no such sync: they're this tab's own
 // widgets now, not a copy of another tab's, so there's nothing to go stale.
 func (t *startTab) refresh() {
-	if t.locationLabel == nil {
+	if t.includedPathsLabel == nil {
 		return // build() hasn't run yet
 	}
-	t.locationLabel.SetText(t.locationSummary())
+	t.refreshLocationSummary()
+}
+
+// refreshLocationSummary re-renders both the Included Paths and Excluded
+// Paths labels from the Workspace Builder's current picker/checkbox/share
+// state.
+func (t *startTab) refreshLocationSummary() {
+	t.includedPathsLabel.SetText(strings.Join(t.includedLocationLines(), "\n"))
+	t.excludedPathsLabel.SetText(strings.Join(t.excludedLocationLines(), "\n"))
 }
 
 func (t *startTab) searchNow() {
@@ -499,7 +656,7 @@ func (t *startTab) selectWorkspace(name string) {
 		return
 	}
 	t.app.locations.applyWorkspace(w)
-	t.locationLabel.SetText(t.locationSummary())
+	t.refreshLocationSummary()
 }
 
 // refreshWorkspaces reloads the quick-select's options from the store --
@@ -550,17 +707,17 @@ func (t *startTab) quickBrowse() {
 		if t.app.locations.picker.tree != nil {
 			t.app.locations.picker.tree.Refresh()
 		}
-		t.locationLabel.SetText(t.locationSummary())
+		t.refreshLocationSummary()
 	}, t.app.win)
 	d.Show()
 }
 
-// locationSummary lists every selected search location on its own line --
-// full local roots, not just a truncated "and N more", and every checked
-// SMB/NFS share by name -- now that removing the Start tab's results list
-// (see startTab's own doc comment) freed the room for this instead of a
-// one-line "Searching: X, Y, and N more" summary.
-func (t *startTab) locationSummary() string {
+// includedLocationLines lists every location that will actually be
+// searched, on its own line -- full local roots (not just a truncated "and
+// N more"), shown with the same friendly drive names the Workspace
+// Builder tree itself uses (see drivePicker.driveLabel) rather than raw
+// mount paths, plus every checked SMB/NFS share by name.
+func (t *startTab) includedLocationLines() []string {
 	var lines []string
 	if t.app.locations.localCheck.Checked {
 		roots, _ := t.app.locations.picker.selectedRootsAndExcludes()
@@ -568,7 +725,7 @@ func (t *startTab) locationSummary() string {
 			lines = append(lines, "•  All local drives")
 		} else {
 			for _, r := range roots {
-				lines = append(lines, "•  "+r)
+				lines = append(lines, "•  "+t.app.locations.picker.driveLabel(r))
 			}
 		}
 	}
@@ -579,9 +736,29 @@ func (t *startTab) locationSummary() string {
 		lines = append(lines, t.selectedShareLines("nfs", "NFS exports (none selected yet -- see Workspace Builder)")...)
 	}
 	if len(lines) == 0 {
-		return "Searching: (nothing selected -- see Workspace Builder)"
+		lines = []string{"(nothing selected -- see Workspace Builder)"}
 	}
-	return "Searching:\n" + strings.Join(lines, "\n")
+	return lines
+}
+
+// excludedLocationLines lists every subfolder explicitly unchecked
+// underneath an otherwise-included local root (see
+// drivePicker.selectedRootsAndExcludes) -- there's no equivalent concept
+// for SMB/NFS shares, which are either searched whole or not checked at
+// all.
+func (t *startTab) excludedLocationLines() []string {
+	if !t.app.locations.localCheck.Checked {
+		return []string{"(none)"}
+	}
+	_, excludes := t.app.locations.picker.selectedRootsAndExcludes()
+	if len(excludes) == 0 {
+		return []string{"(none)"}
+	}
+	lines := make([]string, len(excludes))
+	for i, e := range excludes {
+		lines[i] = "•  " + t.app.locations.picker.driveLabel(e)
+	}
+	return lines
 }
 
 // selectedShareLines lists every checked share/export of the given kind

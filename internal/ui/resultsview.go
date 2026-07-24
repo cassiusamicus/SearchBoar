@@ -53,6 +53,13 @@ type resultsView struct {
 	// text as the Detailed Results tab, which passes 0).
 	maxContextLines int
 
+	// showFirstMatchOnly, when set, treats every card as having at most
+	// one match (see matchesForDisplay) -- one content block per file
+	// instead of one per hit, for a quick glance at files with many hits
+	// each. Set from the Start tab's own "Show first result only"
+	// checkbox; Detailed Results' separate view instance never sets it.
+	showFirstMatchOnly bool
+
 	list     *widget.List
 	scroll   *container.Scroll
 	cardsBox *fyne.Container
@@ -168,11 +175,13 @@ func displayPath(res model.FileResult) string {
 
 // buildCard renders one result (identified by its index into
 // app.searchResults, not its display position) as a self-contained card:
-// filename, Open/Actions buttons, and every content match -- everything a
-// click on a list row used to reveal, visible up front. Path/date/size
-// live on the list row instead (see updateListRow), not here -- this card
-// is the content-preview side, and repeating the same metadata on both
-// sides added a line's worth of vertical space per card for no benefit.
+// filename, Open/Actions buttons, and its content matches (every one,
+// unless showFirstMatchOnly caps it to just the first -- see
+// matchesForDisplay) -- everything a click on a list row used to reveal,
+// visible up front. Path/date/size live on the list row instead (see
+// updateListRow), not here -- this card is the content-preview side, and
+// repeating the same metadata on both sides added a line's worth of
+// vertical space per card for no benefit.
 func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	res := v.app.searchResults[resultIdx]
 
@@ -206,9 +215,10 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 	titleRow := container.NewBorder(nil, nil, nil, container.NewHBox(openBtn, actionsBtn), title)
 
 	re := v.app.currentContentRegex()
+	matches := v.matchesForDisplay(res)
 	blocks := []fyne.CanvasObject{titleRow, widget.NewSeparator()}
-	matchFrames := make([]*canvas.Rectangle, len(res.Matches))
-	for i, m := range res.Matches {
+	matchFrames := make([]*canvas.Rectangle, len(matches))
+	for i, m := range matches {
 		if i > 0 {
 			blocks = append(blocks, widget.NewSeparator())
 		}
@@ -216,7 +226,7 @@ func (v *resultsView) buildCard(resultIdx int) *resultCard {
 		matchFrames[i] = frame
 		blocks = append(blocks, block)
 	}
-	if len(res.Matches) == 0 {
+	if len(matches) == 0 {
 		blocks = append(blocks, widget.NewLabel("(filename match only -- no content preview)"))
 	}
 
@@ -431,15 +441,30 @@ func (v *resultsView) resetCurMatch() {
 	v.curMatch = 0
 }
 
-// matchesOf returns cardIdx's content matches, or nil if cardIdx is out of
-// range -- out-of-range is treated as "no matches" rather than a caller
-// error throughout this file specifically so findMatch's boundary-probing
-// (checking one card past either end) doesn't need its own special case.
+// matchesOf returns cardIdx's content matches (capped per
+// matchesForDisplay when showFirstMatchOnly is set), or nil if cardIdx is
+// out of range -- out-of-range is treated as "no matches" rather than a
+// caller error throughout this file specifically so findMatch's
+// boundary-probing (checking one card past either end) doesn't need its
+// own special case.
 func (v *resultsView) matchesOf(cardIdx int) []model.ContentMatch {
 	if cardIdx < 0 || cardIdx >= len(v.order) {
 		return nil
 	}
-	return v.app.searchResults[v.order[cardIdx]].Matches
+	return v.matchesForDisplay(v.app.searchResults[v.order[cardIdx]])
+}
+
+// matchesForDisplay returns res's content matches, capped to just the
+// first when showFirstMatchOnly is set -- the single choke point every
+// other method funnels through (matchesOf, buildCard), so the inner
+// Back/Forward stepper, boundary checks, and card rendering all agree on
+// how many matches a card has instead of the rendered blocks and the
+// stepping logic disagreeing about it.
+func (v *resultsView) matchesForDisplay(res model.FileResult) []model.ContentMatch {
+	if v.showFirstMatchOnly && len(res.Matches) > 1 {
+		return res.Matches[:1]
+	}
+	return res.Matches
 }
 
 // findMatch searches from the current position in the given direction

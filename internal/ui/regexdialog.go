@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -10,6 +12,22 @@ import (
 
 	"codeberg.org/cassiusamicus/Utilities/internal/regexbuilder"
 )
+
+// wizardHelpText explains, in plain language, how to use the pattern types
+// that take more than a single literal string -- these are the ones this
+// dialog exists to spare the user from having to write regex for.
+func wizardHelpText(t regexbuilder.PatternType) string {
+	switch t {
+	case regexbuilder.AllWords:
+		return "Matches a line that contains every one of these words, in any order. Separate words with commas, e.g. cat, dog, bird -- no regex needed."
+	case regexbuilder.AnyWord:
+		return "Matches a line that contains any one of these words. Separate words with commas, e.g. cat, dog, bird -- no regex needed."
+	case regexbuilder.NearWords:
+		return "Matches when both words appear on the same line, no more than the given number of words apart, in either order -- no regex needed."
+	default:
+		return ""
+	}
+}
 
 // showRegexBuilderDialog reimplements RegexBuilderDialog: pick a pattern
 // type, fill in text, optionally toggle case sensitivity, see the generated
@@ -21,6 +39,14 @@ func showRegexBuilderDialog(win fyne.Window, title, initialText string, onOK fun
 	}
 
 	textEntry := widget.NewEntry()
+	textLabel := widget.NewLabel("Text:")
+	word2Entry := widget.NewEntry()
+	word2Entry.SetPlaceHolder("second word")
+	distanceEntry := widget.NewEntry()
+	distanceEntry.SetText("10")
+	helpLabel := widget.NewLabel("")
+	helpLabel.Wrapping = fyne.TextWrapWord
+	helpLabel.TextStyle = fyne.TextStyle{Italic: true}
 	caseCheck := widget.NewCheck("Case sensitive", nil)
 	regexView := widget.NewMultiLineEntry()
 	regexView.SetMinRowsVisible(2)
@@ -28,7 +54,12 @@ func showRegexBuilderDialog(win fyne.Window, title, initialText string, onOK fun
 	testEntry.SetPlaceHolder("Test text:")
 	resultLabel := widget.NewLabel("")
 
-	current := regexbuilder.Builder{Type: regexbuilder.Contains}
+	proximityRow := container.NewBorder(nil, nil, widget.NewLabel("Second word:"), nil, word2Entry)
+	distanceRow := container.NewBorder(nil, nil, widget.NewLabel("Max words apart:"), nil, distanceEntry)
+	proximityBox := container.NewVBox(proximityRow, distanceRow)
+	proximityBox.Hide()
+
+	current := regexbuilder.Builder{Type: regexbuilder.Contains, Distance: 10}
 
 	regenerate := func() {
 		pattern, err := current.Generate()
@@ -68,6 +99,27 @@ func showRegexBuilderDialog(win fyne.Window, title, initialText string, onOK fun
 		if !current.Type.NeedsText() {
 			textEntry.Disable()
 		}
+
+		switch {
+		case current.Type.IsWordList():
+			textLabel.SetText("Words (comma-separated):")
+			textEntry.SetPlaceHolder("e.g. cat, dog, bird")
+		case current.Type.IsProximity():
+			textLabel.SetText("First word:")
+			textEntry.SetPlaceHolder("first word")
+		default:
+			textLabel.SetText("Text:")
+			textEntry.SetPlaceHolder("")
+		}
+
+		if current.Type.IsProximity() {
+			proximityBox.Show()
+		} else {
+			proximityBox.Hide()
+		}
+
+		helpLabel.SetText(wizardHelpText(current.Type))
+
 		regenerate()
 		runTest()
 	})
@@ -80,6 +132,22 @@ func showRegexBuilderDialog(win fyne.Window, title, initialText string, onOK fun
 		runTest()
 	}
 	current.Text = initialText
+
+	word2Entry.OnChanged = func(s string) {
+		current.Text2 = s
+		regenerate()
+		runTest()
+	}
+
+	distanceEntry.OnChanged = func(s string) {
+		if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && n > 0 {
+			current.Distance = n
+		} else {
+			current.Distance = 0
+		}
+		regenerate()
+		runTest()
+	}
 
 	caseCheck.OnChanged = func(v bool) {
 		current.CaseSensitive = v
@@ -94,7 +162,9 @@ func showRegexBuilderDialog(win fyne.Window, title, initialText string, onOK fun
 
 	form := container.NewVBox(
 		container.NewBorder(nil, nil, widget.NewLabel("Pattern Type:"), nil, typeSelect),
-		container.NewBorder(nil, nil, widget.NewLabel("Text:"), nil, textEntry),
+		container.NewBorder(nil, nil, textLabel, nil, textEntry),
+		proximityBox,
+		helpLabel,
 		caseCheck,
 		widget.NewCard("Generated Regular Expression", "", regexView),
 		widget.NewCard("Test Pattern", "", container.NewVBox(testEntry, resultLabel)),
@@ -105,6 +175,6 @@ func showRegexBuilderDialog(win fyne.Window, title, initialText string, onOK fun
 			onOK(regexView.Text)
 		}
 	}, win)
-	d.Resize(fyne.NewSize(500, 460))
+	d.Resize(fyne.NewSize(500, 520))
 	d.Show()
 }

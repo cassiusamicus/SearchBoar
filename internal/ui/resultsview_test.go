@@ -193,6 +193,48 @@ func TestTruncateListRowExtremelyLongNameAloneReturnsJustName(t *testing.T) {
 	}
 }
 
+func TestMatchesForDisplayReturnsEveryMatchByDefault(t *testing.T) {
+	v := &resultsView{}
+	res := model.FileResult{Matches: make([]model.ContentMatch, 3)}
+	if got := v.matchesForDisplay(res); len(got) != 3 {
+		t.Errorf("matchesForDisplay with showFirstMatchOnly=false = %d matches, want 3", len(got))
+	}
+}
+
+func TestMatchesForDisplayCapsToFirstWhenEnabled(t *testing.T) {
+	v := &resultsView{showFirstMatchOnly: true}
+	res := model.FileResult{Matches: []model.ContentMatch{{LineNum: 1}, {LineNum: 2}, {LineNum: 3}}}
+	got := v.matchesForDisplay(res)
+	if len(got) != 1 || got[0].LineNum != 1 {
+		t.Errorf("matchesForDisplay with showFirstMatchOnly=true = %+v, want just the first match", got)
+	}
+}
+
+// TestMatchesForDisplayNoMatchesStaysEmpty guards the filename-only-hit
+// case: capping to "the first match" must not turn zero matches into a
+// panic or a phantom entry.
+func TestMatchesForDisplayNoMatchesStaysEmpty(t *testing.T) {
+	v := &resultsView{showFirstMatchOnly: true}
+	res := model.FileResult{}
+	if got := v.matchesForDisplay(res); len(got) != 0 {
+		t.Errorf("matchesForDisplay on a filename-only hit = %+v, want empty", got)
+	}
+}
+
+// TestMatchesOfRespectsShowFirstMatchOnly guards the actual point of
+// routing matchesOf through matchesForDisplay: the inner Back/Forward
+// stepper (findMatch) must see the same capped count buildCard renders,
+// or stepping could try to land on a match block that was never built.
+func TestMatchesOfRespectsShowFirstMatchOnly(t *testing.T) {
+	app := &App{searchResults: []model.FileResult{
+		{Matches: make([]model.ContentMatch, 3)},
+	}}
+	v := &resultsView{app: app, order: []int{0}, showFirstMatchOnly: true}
+	if got := v.matchesOf(0); len(got) != 1 {
+		t.Errorf("matchesOf with showFirstMatchOnly=true = %d matches, want 1", len(got))
+	}
+}
+
 func TestFindMatchStepsWithinCard(t *testing.T) {
 	app := &App{searchResults: []model.FileResult{
 		{Matches: make([]model.ContentMatch, 3)},

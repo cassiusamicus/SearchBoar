@@ -18,9 +18,11 @@ import (
 
 // currentContentRegex compiles the Start tab's current content pattern the
 // same way the engine does, so match highlighting in the Results tab is
-// exactly what the engine actually matched against.
+// exactly what the engine actually matched against. A blank field means no
+// content search (matching the engine's own "empty pattern -> filenames
+// only" rule; see engine.go), not a separate enable/disable checkbox.
 func (a *App) currentContentRegex() *regexp.Regexp {
-	if !a.start.contentEnabled.Checked || a.start.contentCombo.Text == "" {
+	if a.start.contentCombo.Text == "" {
 		return nil
 	}
 	re, err := search.CompileRegex(a.start.contentCombo.Text, a.start.caseCheck.Checked)
@@ -47,7 +49,11 @@ func (a *App) searchOptionsTemplate() search.Options {
 	return search.Options{
 		FilePattern:    a.start.fileEntry.Text,
 		ContentPattern: a.start.contentCombo.Text,
-		ContentEnabled: a.start.contentEnabled.Checked,
+		// Always true: the engine itself only runs a content search when
+		// ContentPattern is also non-blank (see engine.go), so a blank
+		// Containing field already means "just search filenames" on its
+		// own -- no separate checkbox needed to say the same thing twice.
+		ContentEnabled: true,
 		Recursive:      a.start.recursiveCheck.Checked,
 		CaseSensitive:  a.start.caseCheck.Checked,
 		// Inverted from the checkbox's own state: excludeHiddenCheck
@@ -73,10 +79,10 @@ func (a *App) startSearch() {
 	}
 	a.netEng.Mounts.UnmountAll(context.Background()) // drop any mounts from a previous search before starting a new one
 
-	if a.start.contentEnabled.Checked {
-		a.cfg.Recent.AddContentPattern(a.start.contentCombo.Text)
-		a.start.contentCombo.SetOptions(a.cfg.Recent.ContentPatterns)
-	}
+	// AddContentPattern itself ignores a blank pattern (see its own doc
+	// comment), so there's nothing left for a checkbox to guard here.
+	a.cfg.Recent.AddContentPattern(a.start.contentCombo.Text)
+	a.start.contentCombo.SetOptions(a.cfg.Recent.ContentPatterns)
 
 	a.searchResults = nil
 	a.results.clear()

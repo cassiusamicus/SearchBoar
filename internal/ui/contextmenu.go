@@ -130,10 +130,7 @@ func (a *App) showOpenWithDialog(path string) {
 }
 
 func (a *App) addFavorite(rec fileRecord) {
-	searchTerm := ""
-	if a.start.contentEnabled.Checked {
-		searchTerm = a.start.contentCombo.Text
-	}
+	searchTerm := a.start.contentCombo.Text
 	err := a.favStore.Add(config.FavoriteRecord{
 		Filepath:   rec.Path,
 		Filename:   rec.Name,

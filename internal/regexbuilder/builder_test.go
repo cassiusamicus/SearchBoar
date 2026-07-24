@@ -127,3 +127,108 @@ func TestTestReturnsErrorForInvalidRegex(t *testing.T) {
 		t.Error("expected an error testing an invalid custom regex")
 	}
 }
+
+// TestGenerateAllWordsMatchesAnyOrderSameLine guards the whole reason
+// AllWords exists as a permutation-based alternation rather than a
+// lookahead: Go's regexp package (RE2) doesn't support (?=...) at all, so
+// "every word present, in any order" has no more direct expression.
+func TestGenerateAllWordsMatchesAnyOrderSameLine(t *testing.T) {
+	b := Builder{Type: AllWords, Text: "fat, sleek", CaseSensitive: true}
+	p, err := b.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(p)
+	if !re.MatchString("the fat and sleek cat") {
+		t.Error("expected AllWords to match when both words appear in the given order")
+	}
+	if !re.MatchString("the sleek fat cat") {
+		t.Error("expected AllWords to match when both words appear in the opposite order")
+	}
+	if re.MatchString("the fat cat") {
+		t.Error("expected AllWords not to match when only one word is present")
+	}
+}
+
+func TestGenerateAllWordsRequiresAtLeastOneWord(t *testing.T) {
+	b := Builder{Type: AllWords, Text: "  , ,  "}
+	if _, err := b.Generate(); err == nil {
+		t.Error("expected an error when AllWords has no real words")
+	}
+}
+
+func TestGenerateAllWordsThreeWordsAnyOrder(t *testing.T) {
+	b := Builder{Type: AllWords, Text: "cat, dog, bird", CaseSensitive: true}
+	p, err := b.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(p)
+	for _, s := range []string{"cat dog bird", "bird cat dog", "dog bird cat"} {
+		if !re.MatchString(s) {
+			t.Errorf("expected AllWords to match %q (all three words present)", s)
+		}
+	}
+	if re.MatchString("cat dog") {
+		t.Error("expected AllWords not to match when only two of three words are present")
+	}
+}
+
+func TestGenerateAnyWordMatchesEitherWord(t *testing.T) {
+	b := Builder{Type: AnyWord, Text: "fear, death", CaseSensitive: true}
+	p, err := b.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(p)
+	if !re.MatchString("fear itself") || !re.MatchString("facing death") {
+		t.Errorf("expected AnyWord pattern %q to match either word", p)
+	}
+	if re.MatchString("nothing relevant here") {
+		t.Error("expected AnyWord not to match when neither word is present")
+	}
+}
+
+func TestGenerateAnyWordRequiresAtLeastOneWord(t *testing.T) {
+	b := Builder{Type: AnyWord, Text: ""}
+	if _, err := b.Generate(); err == nil {
+		t.Error("expected an error when AnyWord has no words")
+	}
+}
+
+func TestGenerateNearWordsMatchesWithinDistanceEitherOrder(t *testing.T) {
+	b := Builder{Type: NearWords, Text: "fat", Text2: "sleek", Distance: 2, CaseSensitive: true}
+	p, err := b.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(p)
+	if !re.MatchString("the fat black sleek cat") {
+		t.Error("expected NearWords to match within the given distance")
+	}
+	if !re.MatchString("the sleek black fat cat") {
+		t.Error("expected NearWords to match regardless of word order")
+	}
+	if re.MatchString("fat one two three sleek") {
+		t.Error("expected NearWords not to match when the words are further apart than the distance")
+	}
+}
+
+func TestGenerateNearWordsDefaultsDistanceWhenUnset(t *testing.T) {
+	b := Builder{Type: NearWords, Text: "fat", Text2: "sleek", CaseSensitive: true}
+	p, err := b.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(p)
+	if !re.MatchString("fat one two three sleek") {
+		t.Error("expected NearWords to fall back to a usable default distance when Distance is unset")
+	}
+}
+
+func TestGenerateNearWordsRequiresBothWords(t *testing.T) {
+	b := Builder{Type: NearWords, Text: "fat", Text2: ""}
+	if _, err := b.Generate(); err == nil {
+		t.Error("expected an error when NearWords is missing its second word")
+	}
+}

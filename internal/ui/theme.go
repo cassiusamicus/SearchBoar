@@ -167,6 +167,15 @@ var (
 	nord11 = color.NRGBA{0xBF, 0x61, 0x6A, 0xFF} // error (red)
 	nord13 = color.NRGBA{0xEB, 0xCB, 0x8B, 0xFF} // warning (yellow)
 	nord14 = color.NRGBA{0xA3, 0xBE, 0x8C, 0xFF} // success (green)
+
+	// nordPlaceholderDark is nord3 blended about a third of the way toward
+	// nord4 (dark mode's real foreground) -- see ColorNameDisabled/
+	// ColorNamePlaceHolder's own comment in Color below for why nord3
+	// alone isn't legible here. Shared by both color names: a disabled
+	// Entry showing real text (e.g. the Start tab's File Types summary
+	// field) and a blank Entry's placeholder text have the exact same
+	// legibility problem against this theme's dark backgrounds.
+	nordPlaceholderDark = color.NRGBA{0x7D, 0x86, 0x96, 0xFF}
 )
 
 func (t *nordTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
@@ -194,8 +203,24 @@ func (t *nordTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 			return nord2
 		}
 		return nord4
-	case theme.ColorNameDisabled, theme.ColorNamePlaceHolder, theme.ColorNameInputBorder, theme.ColorNameScrollBar:
-		return nord3 // works as a mid-tone border/placeholder shade in both modes
+	case theme.ColorNameInputBorder, theme.ColorNameScrollBar:
+		return nord3 // works as a mid-tone border shade in both modes -- not text, so it doesn't need Disabled/PlaceHolder's legibility floor below
+	case theme.ColorNameDisabled, theme.ColorNamePlaceHolder:
+		if t.dark {
+			// nord3 alone is close enough in luminance to nord0/nord1
+			// (this theme's dark backgrounds) that placeholder text --
+			// "Text or regex to search for in files", "All types", etc.
+			// -- and disabled-but-still-meaningful text -- a disabled
+			// Entry showing "ORG" or "All types" (the Start tab's File
+			// Types summary field), not just an inactive button -- read
+			// as genuinely unreadable, not just subtly de-emphasized.
+			// Lightened partway toward nord4 (this mode's real
+			// foreground) for the same reason effectivePrimary lightens
+			// a too-dark accent, while staying dim enough to still read
+			// as de-emphasized rather than regular entered text.
+			return nordPlaceholderDark
+		}
+		return nord3
 	case theme.ColorNamePrimary:
 		return t.effectivePrimary()
 	case colorNameToolbarIcon:
@@ -214,7 +239,16 @@ func (t *nordTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 		// same color, so paging through search results with Prev/Next --
 		// which selects a row without the mouse ever hovering it --
 		// produced no visually obvious "this one" cue.
-		r, g, b, _ := t.accent.RGBA()
+		//
+		// effectivePrimary, not the raw accent: this same color also backs
+		// Entry/RichText's own text-selection highlight (see Fyne's
+		// widget/selectable.go), and a low-alpha rectangle drawn from a
+		// dark accent (defaultAccent, e.g.) blended into this theme's dark
+		// input backgrounds closely enough that a double-click or
+		// click-drag selection existed but couldn't actually be seen --
+		// the same dark-accent-on-dark-panel problem effectivePrimary
+		// already exists to solve for every other accent-derived color.
+		r, g, b, _ := t.effectivePrimary().RGBA()
 		return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x50}
 	case theme.ColorNameHyperlink:
 		return nord9

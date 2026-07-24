@@ -43,7 +43,6 @@ func newTestStartTabForOptions() *startTab {
 	return &startTab{
 		fileEntry:          widget.NewEntry(),
 		contentCombo:       widget.NewSelectEntry(nil),
-		contentEnabled:     widget.NewCheck("", nil),
 		recursiveCheck:     widget.NewCheck("", nil),
 		caseCheck:          widget.NewCheck("", nil),
 		excludeHiddenCheck: widget.NewCheck("", nil),

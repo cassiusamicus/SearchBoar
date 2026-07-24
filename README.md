@@ -40,26 +40,47 @@ glob patterns, the way the original two apps worked.
 
 - **Start tab**: the app's one search page, laid out in two columns with a
   draggable divider between them, each section (Search Command/Search
-  Location/Result Preview) given a shaded, bordered box so they read as
+  Locations/Result Preview) given a shaded, bordered box so they read as
   distinct at a glance. Left: a Search Command card with everything a
-  search needs -- file-type quick filters, Files/Containing regex fields
-  (each with a graphical regex-builder wizard), Exclude hidden files/
-  Exclude ~ backup files checkboxes (both unchecked by default -- hidden
-  and Unix/Emacs-style `~` backup files are included unless you opt into
-  excluding them), Search Now, a Saved Searches quick-select, and Clear
-  History, then Options/Context Lines/File Size Filter/Exclude Patterns/
-  Search Help tucked behind a collapsed-by-default "Advanced Options"
-  disclosure -- then a Search Location card (a link to Workspace Builder
-  for anything more elaborate, a Saved Workspaces quick-select, and a full
-  line-by-line list of every selected local root and checked SMB/NFS
-  share, not just a truncated one-line summary). Right: your most recent
-  search hits as full cards with
+  search needs -- Containing/File Names regex fields (each with a
+  graphical Expr. Wizard; Containing has no separate enable checkbox --
+  leave it blank to search filenames only), whose Pattern Type list covers
+  the common cases in plain language, no regex required to use them: "All
+  of these words (AND)" and "Any of these words (OR)" take a comma-
+  separated word list, and "These words near each other" takes two words
+  plus a max-words-apart distance -- "Custom regex" is still there for
+  anyone who wants to hand-write a pattern, and every option's generated
+  regex is shown (and live-tested against sample text) so it's never a
+  black box. A File Types field
+  (a read-only summary, e.g. "MD, TXT" or "All types") with its own Type
+  Wizard popup of file-type checkboxes rather than seven checkboxes
+  permanently taking up their own row, plus a plain "Other extensions"
+  field in that same popup for anything not in the checkbox list -- a
+  comma- or |-separated list like "xls, doc, odt" (leading dot optional),
+  no regex needed -- Exclude hidden files/Exclude ~
+  backup files checkboxes (both
+  unchecked by default -- hidden and Unix/Emacs-style `~` backup files are
+  included unless you opt into excluding them), Search Now, a Saved
+  Searches quick-select, and Clear History, then Options/Context Lines/
+  File Size Filter/Exclude Patterns/Search Help tucked behind a
+  collapsed-by-default "Advanced Options" disclosure -- then a Search
+  Locations card with two sections, Included Paths and Excluded Paths
+  (every checked local root -- shown with the same friendly drive names
+  the Workspace Builder tree itself uses, not raw mount paths -- and
+  checked SMB/NFS share, versus every subfolder explicitly unchecked
+  underneath an otherwise-included root), plus a link to Workspace Builder
+  for anything more elaborate and a Saved Workspaces quick-select. Right:
+  your most recent search hits as full cards with
   Prev/Next, the same live view Detailed Results shows just laid out
   compactly, with its own sort dropdown (Number of Hits/Name/Location/
   Modified/Size) and jump-to-first/jump-to-last buttons alongside the nav
   buttons -- persisted across restarts. Each card here shows fewer context
   lines around a match than Detailed Results does, centered on the match
-  itself -- enough for a quick glance, not a second full-detail view.
+  itself -- enough for a quick glance, not a second full-detail view. A
+  "Show first result only" checkbox next to the result count caps every
+  card to just its first hit instead of one block per match, for files
+  with many hits each -- Detailed Results keeps its own separate view, so
+  this never affects what it shows.
 - **Workspace Builder tab**: a workspace bar across the top (name +
   Load/Save Current as.../Delete -- prominent since switching or saving a
   workspace is one of the more common things to do here, not one more
