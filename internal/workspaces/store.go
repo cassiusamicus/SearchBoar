@@ -8,7 +8,7 @@ import (
 	"errors"
 	"sort"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
 )
 
 var ErrNotFound = errors.New("workspace not found")

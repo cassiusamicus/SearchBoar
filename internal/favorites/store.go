@@ -6,7 +6,7 @@ package favorites
 import (
 	"errors"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
 )
 
 const DefaultCategory = "Uncategorized"

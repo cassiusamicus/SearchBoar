@@ -11,10 +11,10 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/cache"
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
-	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
-	"codeberg.org/cassiusamicus/Utilities/internal/search"
+	"github.com/cassiusamicus/SearchBoar/internal/cache"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/netsearch"
+	"github.com/cassiusamicus/SearchBoar/internal/search"
 )
 
 // commonTermsTab is the "Common Search Terms" tab: a small, user-curated

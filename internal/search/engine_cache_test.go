@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/cache"
+	"github.com/cassiusamicus/SearchBoar/internal/cache"
 )
 
 func openTestCache(t *testing.T) *cache.Cache {

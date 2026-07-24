@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
 )
 
 // buildWorkspaceBar is the Workspace Builder tab's workspace name + Load/

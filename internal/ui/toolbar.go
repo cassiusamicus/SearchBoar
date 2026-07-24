@@ -7,7 +7,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/version"
+	"github.com/cassiusamicus/SearchBoar/internal/version"
 )
 
 const (

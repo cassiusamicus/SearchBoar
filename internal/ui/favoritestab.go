@@ -10,9 +10,9 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
-	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
-	"codeberg.org/cassiusamicus/Utilities/internal/fsutil"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/favorites"
+	"github.com/cassiusamicus/SearchBoar/internal/fsutil"
 )
 
 type favoritesTab struct {

@@ -3,7 +3,7 @@ package workspaces
 import (
 	"testing"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
 )
 
 func TestPutGetListDelete(t *testing.T) {

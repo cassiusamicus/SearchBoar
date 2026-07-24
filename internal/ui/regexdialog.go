@@ -10,7 +10,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/regexbuilder"
+	"github.com/cassiusamicus/SearchBoar/internal/regexbuilder"
 )
 
 // wizardHelpText explains, in plain language, how to use the pattern types

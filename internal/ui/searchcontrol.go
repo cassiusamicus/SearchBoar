@@ -9,11 +9,11 @@ import (
 	"strings"
 	"sync"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/cache"
-	"codeberg.org/cassiusamicus/Utilities/internal/fsutil"
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
-	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
-	"codeberg.org/cassiusamicus/Utilities/internal/search"
+	"github.com/cassiusamicus/SearchBoar/internal/cache"
+	"github.com/cassiusamicus/SearchBoar/internal/fsutil"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/netsearch"
+	"github.com/cassiusamicus/SearchBoar/internal/search"
 )
 
 // currentContentRegex compiles the Start tab's current content pattern the

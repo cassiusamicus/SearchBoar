@@ -10,7 +10,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
+	"github.com/cassiusamicus/SearchBoar/internal/netsearch"
 )
 
 // drivePicker is the "select and deselect all the desired drives and

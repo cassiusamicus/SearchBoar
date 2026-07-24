@@ -7,8 +7,8 @@ import (
 
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/cache"
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/cache"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
 )
 
 func TestRemoveResultByPathRemovesOnlyTheMatchingEntry(t *testing.T) {

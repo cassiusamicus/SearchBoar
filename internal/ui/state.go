@@ -8,14 +8,14 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/cache"
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
-	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
-	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
-	"codeberg.org/cassiusamicus/Utilities/internal/search"
-	"codeberg.org/cassiusamicus/Utilities/internal/storedsearches"
-	"codeberg.org/cassiusamicus/Utilities/internal/workspaces"
+	"github.com/cassiusamicus/SearchBoar/internal/cache"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/favorites"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/netsearch"
+	"github.com/cassiusamicus/SearchBoar/internal/search"
+	"github.com/cassiusamicus/SearchBoar/internal/storedsearches"
+	"github.com/cassiusamicus/SearchBoar/internal/workspaces"
 )
 
 // App is the shared hub every tab/dialog closes over: config, engines,

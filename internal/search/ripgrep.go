@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
 )
 
 type rgFileState struct {

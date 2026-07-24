@@ -8,8 +8,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
-	"codeberg.org/cassiusamicus/Utilities/internal/fsutil"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/fsutil"
 )
 
 // fileContextMenu builds the right-click menu shared by the Details file

@@ -3,7 +3,7 @@ package storedsearches
 import (
 	"testing"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
 )
 
 func TestAddGetListDelete(t *testing.T) {

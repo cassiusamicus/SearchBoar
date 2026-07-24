@@ -1,4 +1,4 @@
-module codeberg.org/cassiusamicus/Utilities
+module github.com/cassiusamicus/SearchBoar
 
 go 1.26.4
 

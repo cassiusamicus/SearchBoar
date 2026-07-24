@@ -17,8 +17,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/cache"
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/cache"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
 )
 
 // Engine runs searches. Its zero value is usable but won't have ripgrep or

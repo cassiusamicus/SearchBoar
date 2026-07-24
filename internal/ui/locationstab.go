@@ -11,7 +11,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
+	"github.com/cassiusamicus/SearchBoar/internal/netsearch"
 )
 
 // networkShareItem is one discovered SMB share or NFS export, shown as a

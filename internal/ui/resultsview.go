@@ -14,7 +14,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
 )
 
 // resultsView is the "list of filenames + full-detail cards with

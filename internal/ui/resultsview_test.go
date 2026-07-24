@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
 )
 
 func TestHighlightSegmentsMarksEveryOccurrence(t *testing.T) {

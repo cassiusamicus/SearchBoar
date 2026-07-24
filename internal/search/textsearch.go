@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
 )
 
 // readText reads a whole text file's raw content. Files are expected to be

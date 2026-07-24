@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/assets"
+	"github.com/cassiusamicus/SearchBoar/assets"
 )
 
 // brand colors carried forward from the original GTK3 app's wordmark and

@@ -13,8 +13,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
-	"codeberg.org/cassiusamicus/Utilities/internal/fsutil"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/fsutil"
 )
 
 // openConfigFile opens config.ini in the user's default text editor -- kept

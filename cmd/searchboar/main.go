@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/model"
-	"codeberg.org/cassiusamicus/Utilities/internal/search"
-	"codeberg.org/cassiusamicus/Utilities/internal/ui"
+	"github.com/cassiusamicus/SearchBoar/internal/model"
+	"github.com/cassiusamicus/SearchBoar/internal/search"
+	"github.com/cassiusamicus/SearchBoar/internal/ui"
 )
 
 func main() {

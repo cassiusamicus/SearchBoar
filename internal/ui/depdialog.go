@@ -6,7 +6,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
-	"codeberg.org/cassiusamicus/Utilities/internal/fsutil"
+	"github.com/cassiusamicus/SearchBoar/internal/fsutil"
 )
 
 // checkDependenciesOnStartup mirrors the original app's automatic

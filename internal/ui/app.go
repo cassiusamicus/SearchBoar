@@ -10,14 +10,14 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 
-	"codeberg.org/cassiusamicus/Utilities/assets"
-	"codeberg.org/cassiusamicus/Utilities/internal/cache"
-	"codeberg.org/cassiusamicus/Utilities/internal/config"
-	"codeberg.org/cassiusamicus/Utilities/internal/favorites"
-	"codeberg.org/cassiusamicus/Utilities/internal/netsearch"
-	"codeberg.org/cassiusamicus/Utilities/internal/search"
-	"codeberg.org/cassiusamicus/Utilities/internal/storedsearches"
-	"codeberg.org/cassiusamicus/Utilities/internal/workspaces"
+	"github.com/cassiusamicus/SearchBoar/assets"
+	"github.com/cassiusamicus/SearchBoar/internal/cache"
+	"github.com/cassiusamicus/SearchBoar/internal/config"
+	"github.com/cassiusamicus/SearchBoar/internal/favorites"
+	"github.com/cassiusamicus/SearchBoar/internal/netsearch"
+	"github.com/cassiusamicus/SearchBoar/internal/search"
+	"github.com/cassiusamicus/SearchBoar/internal/storedsearches"
+	"github.com/cassiusamicus/SearchBoar/internal/workspaces"
 )
 
 // Run builds and shows the main SearchBoar window, then blocks until the
