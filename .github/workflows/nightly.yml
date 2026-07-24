@@ -1,0 +1,80 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # 6 AM UTC daily
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install fyne-cross
+        run: go install github.com/fyne-io/fyne-cross@latest
+
+      # SearchBoar is a Fyne GUI app (cgo, links GLFW/OpenGL/X11), unlike a
+      # plain Go binary -- it can't cross-compile with CGO_ENABLED=0 from a
+      # single `go build`. fyne-cross's Docker images bundle a real cross
+      # toolchain per target (including GOARM=7 for the plain "arm"
+      # target, i.e. ARMv7), so one command covers all three Linux
+      # architectures without needing separate runners per arch.
+      - name: Build (linux amd64, arm64, armv7)
+        run: |
+          fyne-cross linux -arch=amd64,arm64,arm \
+            -icon=assets/icon.png \
+            -app-id=org.epicureanfriends.searchboar \
+            -name=searchboar \
+            ./cmd/searchboar
+
+      - name: Rename packages for release
+        run: |
+          mkdir -p artifacts
+          cp fyne-cross/dist/linux-amd64/searchboar.tar.xz artifacts/searchboar-linux-amd64.tar.xz
+          cp fyne-cross/dist/linux-arm64/searchboar.tar.xz artifacts/searchboar-linux-arm64.tar.xz
+          cp fyne-cross/dist/linux-arm/searchboar.tar.xz artifacts/searchboar-linux-armv7.tar.xz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: searchboar-linux-builds
+          path: artifacts/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Delete existing nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete nightly -y --repo ${{ github.repository }} 2>/dev/null || true
+
+      - name: Delete nightly tag
+        run: |
+          git clone --bare https://x-access-token:${{ github.token }}@github.com/${{ github.repository }} repo
+          cd repo
+          git tag -d nightly 2>/dev/null || true
+          git push origin :refs/tags/nightly 2>/dev/null || true
+
+      - name: Create nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create nightly \
+            --repo ${{ github.repository }} \
+            --title "Nightly Build" \
+            --notes "Automated nightly build from main. Updated daily at 6 AM UTC. Linux only: amd64, arm64, armv7." \
+            --prerelease \
+            artifacts/*

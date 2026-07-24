@@ -32,6 +32,11 @@ Or run a single search from the terminal without opening the GUI:
 ./searchboar -cli -dir . -file-pattern '\.go$' -content 'func New'
 ```
 
+## Download
+
+Pre-built Linux binaries (amd64, arm64, armv7) are published automatically
+as [nightly releases](../../releases/tag/nightly) from the main branch.
+
 ## Features
 
 Local and network search share one regex-based engine and one set of
