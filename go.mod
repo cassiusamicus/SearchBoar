@@ -1,10 +1,11 @@
 module github.com/cassiusamicus/SearchBoar
 
-go 1.26.4
+go 1.25.0
 
 require (
 	fyne.io/fyne/v2 v2.8.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
+	modernc.org/sqlite v1.54.0
 )
 
 require (
@@ -51,5 +52,4 @@ require (
 	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.54.0 // indirect
 )

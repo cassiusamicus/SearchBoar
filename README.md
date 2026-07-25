@@ -219,3 +219,7 @@ means only one authentication prompt, not one per share.
 ```sh
 go test ./...
 ```
+
+## License
+
+GNU General Public License v3.0 — see [LICENSE](LICENSE) for the full text.

@@ -27,9 +27,18 @@ jobs:
       # toolchain per target (including GOARM=7 for the plain "arm"
       # target, i.e. ARMv7), so one command covers all three Linux
       # architectures without needing separate runners per arch.
+      #
+      # -env=GOTOOLCHAIN=auto: the fyne-cross build actually runs inside its
+      # own Docker container (a separate Go install from the runner's), so
+      # a GOTOOLCHAIN set on this step has no effect there -- fyne-cross's
+      # own -env flag is what actually reaches the container. Without it,
+      # the container's older bundled Go refuses outright to build a
+      # go.mod that (after a `go mod tidy` bump) requires a newer one,
+      # instead of just downloading the newer toolchain itself.
       - name: Build (linux amd64, arm64, armv7)
         run: |
           fyne-cross linux -arch=amd64,arm64,arm \
+            -env=GOTOOLCHAIN=auto \
             -icon=assets/icon.png \
             -app-id=org.epicureanfriends.searchboar \
             -name=searchboar \
