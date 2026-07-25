@@ -8,9 +8,30 @@ on:
 permissions:
   contents: write
 
+env:
+  # The same GUI dev libraries the README lists as a local build
+  # requirement -- Fyne's desktop backend links GLFW/OpenGL/X11/Wayland via
+  # cgo, so a plain `go build` needs real headers for all of them, not just
+  # a cross toolchain. (fyne-cross's Docker images were tried first, but
+  # their bundled headers are missing EGL -- an unresolved upstream bug,
+  # see fyne-io/fyne#6055 -- so this builds directly instead.)
+  FYNE_APT_DEPS: >-
+    gcc libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev
+    libxinerama-dev libxi-dev libxxf86vm-dev libwayland-dev libxkbcommon-dev
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  # amd64 and arm64 build natively on GitHub's own Ubuntu runners (no
+  # cross-compilation at all -- ubuntu-24.04-arm is a real arm64 machine),
+  # which sidesteps cross-toolchain/header mismatches entirely.
+  build-native:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
 
@@ -18,46 +39,51 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install fyne-cross
-        run: go install github.com/fyne-io/fyne-cross@latest
-
-      # SearchBoar is a Fyne GUI app (cgo, links GLFW/OpenGL/X11), unlike a
-      # plain Go binary -- it can't cross-compile with CGO_ENABLED=0 from a
-      # single `go build`. fyne-cross's Docker images bundle a real cross
-      # toolchain per target (including GOARM=7 for the plain "arm"
-      # target, i.e. ARMv7), so one command covers all three Linux
-      # architectures without needing separate runners per arch.
-      #
-      # -env=GOTOOLCHAIN=auto: the fyne-cross build actually runs inside its
-      # own Docker container (a separate Go install from the runner's), so
-      # a GOTOOLCHAIN set on this step has no effect there -- fyne-cross's
-      # own -env flag is what actually reaches the container. Without it,
-      # the container's older bundled Go refuses outright to build a
-      # go.mod that (after a `go mod tidy` bump) requires a newer one,
-      # instead of just downloading the newer toolchain itself.
-      - name: Build (linux amd64, arm64, armv7)
+      - name: Install Fyne build dependencies
         run: |
-          fyne-cross linux -arch=amd64,arm64,arm \
-            -env=GOTOOLCHAIN=auto \
-            -icon=assets/icon.png \
-            -app-id=org.epicureanfriends.searchboar \
-            -name=searchboar \
-            ./cmd/searchboar
+          sudo apt-get update
+          sudo apt-get install -y $FYNE_APT_DEPS
 
-      - name: Rename packages for release
-        run: |
-          mkdir -p artifacts
-          cp fyne-cross/dist/linux-amd64/searchboar.tar.xz artifacts/searchboar-linux-amd64.tar.xz
-          cp fyne-cross/dist/linux-arm64/searchboar.tar.xz artifacts/searchboar-linux-arm64.tar.xz
-          cp fyne-cross/dist/linux-arm/searchboar.tar.xz artifacts/searchboar-linux-armv7.tar.xz
+      - name: Build
+        run: go build -ldflags="-s -w" -o searchboar-linux-${{ matrix.arch }} ./cmd/searchboar
+
+      - name: Package
+        run: tar -cJf searchboar-linux-${{ matrix.arch }}.tar.xz searchboar-linux-${{ matrix.arch }}
 
       - uses: actions/upload-artifact@v7
         with:
-          name: searchboar-linux-builds
-          path: artifacts/*
+          name: searchboar-linux-${{ matrix.arch }}
+          path: searchboar-linux-${{ matrix.arch }}.tar.xz
+
+  # No GitHub-hosted armv7 (32-bit) runner exists. QEMU + a real armv7
+  # container gives a genuinely native build (apt installs and cgo compile
+  # all happen inside an actual armv7 environment, just emulated) rather
+  # than a cross toolchain with its own sysroot/header mismatches to chase.
+  build-armv7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v3
+
+      - name: Build inside an emulated armv7 container
+        run: |
+          docker run --rm --platform linux/arm/v7 \
+            -v "$PWD":/src -w /src \
+            golang:1-bookworm bash -c "
+              apt-get update &&
+              apt-get install -y $FYNE_APT_DEPS &&
+              go build -ldflags='-s -w' -o searchboar-linux-armv7 ./cmd/searchboar
+            "
+          tar -cJf searchboar-linux-armv7.tar.xz searchboar-linux-armv7
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: searchboar-linux-armv7
+          path: searchboar-linux-armv7.tar.xz
 
   release:
-    needs: build
+    needs: [build-native, build-armv7]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
