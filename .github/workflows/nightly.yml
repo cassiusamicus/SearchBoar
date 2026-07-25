@@ -67,13 +67,20 @@ jobs:
       - uses: docker/setup-qemu-action@v3
 
       - name: Build inside an emulated armv7 container
+        # -buildvcs=false: the container sees the repo as a bind-mounted
+        # directory owned by a different UID than it's running as, so Go's
+        # own VCS-stamping git invocation fails with "error obtaining VCS
+        # status" (git's dubious-ownership check) -- unrelated to the
+        # actual compile, just turned off rather than worked around with a
+        # global safe.directory config for a container that only exists
+        # for this one build.
         run: |
           docker run --rm --platform linux/arm/v7 \
             -v "$PWD":/src -w /src \
             golang:1-bookworm bash -c "
               apt-get update &&
               apt-get install -y $FYNE_APT_DEPS &&
-              go build -ldflags='-s -w' -o searchboar-linux-armv7 ./cmd/searchboar
+              go build -buildvcs=false -ldflags='-s -w' -o searchboar-linux-armv7 ./cmd/searchboar
             "
           tar -cJf searchboar-linux-armv7.tar.xz searchboar-linux-armv7
 
