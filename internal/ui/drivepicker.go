@@ -24,6 +24,12 @@ type drivePicker struct {
 	drives    []netsearch.Drive
 	selection *netsearch.PathSelection
 	children  map[string][]string // lazy subdirectory listing cache
+
+	// OnChanged, if set, fires after any checkbox change (SetCascade),
+	// letting the Workspace Builder tab's aggregate Selected column
+	// rebuild itself without this picker needing to know that column
+	// exists.
+	OnChanged func()
 }
 
 func newDrivePicker() *drivePicker {
@@ -118,6 +124,9 @@ func (p *drivePicker) updateNode(uid widget.TreeNodeID, box *tappableBox) {
 	chk.OnChanged = func(v bool) {
 		p.selection.SetCascade(path, v)
 		p.tree.Refresh()
+		if p.OnChanged != nil {
+			p.OnChanged()
+		}
 	}
 }
 

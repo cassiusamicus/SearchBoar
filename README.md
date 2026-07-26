@@ -75,12 +75,14 @@ glob patterns, the way the original two apps worked.
   Searches quick-select, and Clear History, then Options/Context Lines/
   File Size Filter/Exclude Patterns/Search Help tucked behind a
   collapsed-by-default "Advanced Options" disclosure -- then a Search
-  Locations card with two sections, Included Paths and Excluded Paths
-  (every checked local root -- shown with the same friendly drive names
-  the Workspace Builder tree itself uses, not raw mount paths -- and
-  checked SMB/NFS share, versus every subfolder explicitly unchecked
-  underneath an otherwise-included root), plus a link to Workspace Builder
-  for anything more elaborate and a Saved Workspaces quick-select. Right:
+  Locations card with two sections, Included Paths (with the name of
+  whichever saved workspace is currently loaded, if any, shown at the
+  right of that same line) and Excluded Paths (every checked local root --
+  shown with the same friendly drive names the Workspace Builder tree
+  itself uses, not raw mount paths -- and checked SMB/NFS share, versus
+  every subfolder explicitly unchecked underneath an otherwise-included
+  root), plus a link to Workspace Builder for anything more elaborate and
+  a Saved Workspaces quick-select. Right:
   your most recent search hits as full cards with
   Prev/Next, the same live view Detailed Results shows just laid out
   compactly, with its own sort dropdown (Number of Hits/Name/Location/
@@ -95,21 +97,39 @@ glob patterns, the way the original two apps worked.
 - **Workspace Builder tab**: a workspace bar across the top (name +
   Load/Save Current as.../Delete -- prominent since switching or saving a
   workspace is one of the more common things to do here, not one more
-  card buried in a sidebar column) above a tree of local drives (labeled
-  Internal/Removable/SD Card) and their subfolders, each with a checkbox —
-  checking a drive cascades to its expanded subfolders, but any subfolder
-  can be individually re-checked/unchecked. Network shares are opt-in: a
-  "Scan for shares" button lists every SMB share/NFS export found on the
-  network range, and only the ones you check get mounted — there's no
-  "mount everything discovered" fallback, since blindly mounting every
-  share on every LAN host means a wall of privilege-escalation prompts.
-  All shares selected for one search are mounted in a single elevated
-  batch (one `pkexec`/`sudo` prompt per search, not one per share), and
-  the SMB username/password fields are reused for every mount for the
-  rest of the session (never written to disk). A sidebar has the
-  Local/SMB/NFS master toggles (local-only by default -- SMB/NFS scanning
-  and mounting is opt-in per search, not something every search pays for),
-  the network range, and a prominent Search button.
+  card buried in a sidebar column), then three columns -- **Selected**, a
+  live flat list of every path currently checked, local and network alike,
+  with a remove button on each row so you don't have to go hunting back
+  through either tree to uncheck something; **Local**, a tree of local
+  drives (labeled Internal/Removable/SD Card) and their subfolders, each
+  with a checkbox -- checking a drive cascades to its expanded subfolders,
+  but any subfolder can be individually re-checked/unchecked; and
+  **Network**, discovered SMB shares and NFS exports. Network shares are
+  opt-in: check SMB shares/NFS exports, optionally enter SMB credentials,
+  then "Scan for Shares" -- an indeterminate progress bar and disabled
+  button make clear it's actually working during a scan that can take up
+  to two minutes, and if `nmap` isn't installed the scan still works (a
+  slower TCP-connect fallback probe), with the status line saying so rather
+  than an ambiguous "found nothing." Discovered SMB shares are themselves
+  expandable trees -- browsing into one lists its real subfolders live, via
+  `smbclient`'s unmounted, no-privilege "ls" command, so a specific
+  subfolder of a share can be selected instead of only the whole share; NFS
+  exports stay a single checkable line, since there's no equivalent
+  unprivileged way to browse inside one. The Range field is pre-filled from
+  whichever network your last successful scan actually found something on,
+  falling back to an auto-detected local subnet if you've never scanned
+  successfully. Only the shares/subfolders you actually check get mounted
+  when you search -- there's no "mount everything discovered" fallback,
+  since blindly mounting every share on every LAN host means a wall of
+  privilege-escalation prompts. All shares selected for one search are
+  mounted in a single elevated batch (one `pkexec`/`sudo` prompt per
+  search, not one per share), and the SMB username/password fields are
+  reused for every mount for the rest of the session (never written to
+  disk). Local search has no on/off toggle of its own -- the tree already
+  means "nothing checked" as "search everything," so a separate checkbox
+  saying the same thing added nothing -- and there's no Search button here
+  either; Start tab's Search Now is the only place a search actually
+  launches from.
 - **Workspaces**: save the current Workspace Builder selection (checked
   drives/folders, excluded subfolders, Local/SMB/NFS scope, and any
   checked SMB/NFS shares) under a name, then Load or Delete it later from

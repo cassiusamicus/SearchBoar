@@ -27,17 +27,19 @@ func boolFlag(b bool) string {
 	return "0"
 }
 
-// loadWorkspaces parses [Workspaces]; a value must have exactly 7
+// loadWorkspaces parses [Workspaces]; a value must have exactly 8
 // pipe-delimited parts (search_local|search_smb|search_nfs|local_roots|
-// exclude_dirs|smb_shares|nfs_exports) to be considered valid.
+// exclude_dirs|smb_shares|nfs_exports|smb_share_excludes) to be considered
+// valid. A workspace saved before smb_share_excludes existed has exactly 7
+// parts and is still accepted, with that field simply left empty.
 func (c *Config) loadWorkspaces(doc *iniDoc) {
 	for _, name := range doc.keys(sectionWorkspaces) {
 		v, _ := doc.get(sectionWorkspaces, name)
-		parts := strings.SplitN(v, "|", 7)
-		if len(parts) != 7 {
+		parts := strings.SplitN(v, "|", 8)
+		if len(parts) != 7 && len(parts) != 8 {
 			continue
 		}
-		c.Workspaces[name] = LocationWorkspace{
+		w := LocationWorkspace{
 			Name:        name,
 			SearchLocal: parts[0] == "1",
 			SearchSMB:   parts[1] == "1",
@@ -47,6 +49,10 @@ func (c *Config) loadWorkspaces(doc *iniDoc) {
 			SMBShares:   splitWorkspaceList(parts[5]),
 			NFSExports:  splitWorkspaceList(parts[6]),
 		}
+		if len(parts) == 8 {
+			w.SMBShareExcludes = splitWorkspaceList(parts[7])
+		}
+		c.Workspaces[name] = w
 	}
 }
 
@@ -58,6 +64,7 @@ func (c *Config) saveWorkspaces(doc *iniDoc) {
 			boolFlag(w.SearchLocal), boolFlag(w.SearchSMB), boolFlag(w.SearchNFS),
 			joinWorkspaceList(w.LocalRoots), joinWorkspaceList(w.ExcludeDirs),
 			joinWorkspaceList(w.SMBShares), joinWorkspaceList(w.NFSExports),
+			joinWorkspaceList(w.SMBShareExcludes),
 		}, "|")
 		sec.set(name, value)
 	}

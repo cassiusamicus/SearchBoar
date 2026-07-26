@@ -3,6 +3,7 @@ package netsearch
 import (
 	"context"
 	"fmt"
+	"sort"
 )
 
 // Engine discovers and mounts search locations (local drives, SMB shares,
@@ -75,17 +76,19 @@ func (e *Engine) ResolveRoots(ctx context.Context, opts LocationOptions, log fun
 
 // DiscoverSMB scans cidr for SMB hosts and lists their shares, for
 // populating the Workspace Builder tab's share picker. It does not mount
-// anything.
-func (e *Engine) DiscoverSMB(ctx context.Context, cidr, user, pass string) ([]SMBShare, error) {
-	hosts, err := discoverSMBHosts(ctx, cidr)
+// anything. usedFallback reports whether nmap was unavailable and a
+// slower TCP-connect probe was used instead (see discoverSMBHosts), so the
+// caller can surface that distinction rather than leaving "0 found"
+// ambiguous between "no shares" and "no nmap."
+func (e *Engine) DiscoverSMB(ctx context.Context, cidr, user, pass string) (shares []SMBShare, usedFallback bool, err error) {
+	hosts, usedFallback, err := discoverSMBHosts(ctx, cidr)
 	if err != nil {
-		return nil, err
+		return nil, usedFallback, err
 	}
 
-	var shares []SMBShare
 	for _, host := range hosts {
 		if ctx.Err() != nil {
-			return shares, ctx.Err()
+			return shares, usedFallback, ctx.Err()
 		}
 		list, err := listSMBShares(ctx, host, user, pass)
 		if err != nil {
@@ -95,7 +98,26 @@ func (e *Engine) DiscoverSMB(ctx context.Context, cidr, user, pass string) ([]SM
 			shares = append(shares, SMBShare{Host: host, Share: s})
 		}
 	}
-	return shares, nil
+	return shares, usedFallback, nil
+}
+
+// ListSMBDir lists the immediate subdirectories of subpath within an SMB
+// share, for the Workspace Builder tab's expandable share tree. Unlike
+// ResolveRoots, this never mounts anything (see listSMBDir), so browsing a
+// share's folder structure needs no privilege escalation.
+func (e *Engine) ListSMBDir(ctx context.Context, host, share, subpath, user, pass string) ([]string, error) {
+	entries, err := listSMBDir(ctx, host, share, subpath, user, pass)
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	for _, entry := range entries {
+		if entry.IsDir {
+			dirs = append(dirs, entry.Name)
+		}
+	}
+	sort.Strings(dirs)
+	return dirs, nil
 }
 
 // DiscoverNFS scans cidr for NFS exports, for populating the Search

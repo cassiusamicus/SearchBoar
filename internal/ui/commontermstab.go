@@ -190,10 +190,6 @@ func (r *termRow) CreateRenderer() fyne.WidgetRenderer {
 // search or reindex already in flight, matching startSearch's own
 // one-operation-at-a-time behavior.
 func (a *App) reindexTerm(term string) {
-	if !a.locations.anyLocationSelected() {
-		a.setStatus("No search location selected -- can't index \"" + term + "\" (see Workspace Builder tab)")
-		return
-	}
 	if a.cancelSearch != nil {
 		a.cancelSearch()
 	}

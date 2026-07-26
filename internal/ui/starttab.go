@@ -58,11 +58,12 @@ var fileTypeOrder = []string{"ALL", "MD", "ORG", "TXT", "HTML", "PDF", "DOCX"}
 type startTab struct {
 	app *App
 
-	includedPathsLabel *widget.Label
-	excludedPathsLabel *widget.Label
-	savedSearchSelect  *widget.Select
-	workspaceSelect    *widget.Select
-	view               *resultsView
+	includedPathsLabel    *widget.Label
+	excludedPathsLabel    *widget.Label
+	currentWorkspaceLabel *widget.Label
+	savedSearchSelect     *widget.Select
+	workspaceSelect       *widget.Select
+	view                  *resultsView
 
 	fileTypeChecks   map[string]*widget.Check
 	updatingTypes    bool
@@ -338,6 +339,12 @@ func (t *startTab) build() fyne.CanvasObject {
 	t.includedPathsLabel.Wrapping = fyne.TextWrapWord
 	t.excludedPathsLabel = widget.NewLabel("")
 	t.excludedPathsLabel.Wrapping = fyne.TextWrapWord
+	// Shows which saved workspace (if any) is currently loaded, right on
+	// the Included Paths line -- otherwise the only way to tell was the
+	// Saved Workspaces dropdown below, easy to miss since it doubles as
+	// the picker for loading a *different* one.
+	t.currentWorkspaceLabel = widget.NewLabel("")
+	t.currentWorkspaceLabel.TextStyle = fyne.TextStyle{Italic: true}
 	browseBtn := widget.NewButton("Browse for Folder", func() { t.quickBrowse() })
 	openLocationsBtn := widget.NewButton("Workspace Builder  →", func() {
 		t.app.tabs.SelectIndex(tabIndexLocations)
@@ -354,7 +361,8 @@ func (t *startTab) build() fyne.CanvasObject {
 	// were deliberately carved out, instead of that only being visible by
 	// reading every line closely.
 	locationCard := boxedCard(t.app, "Search Locations", container.NewVBox(
-		widget.NewLabel("Included Paths:"), t.includedPathsLabel,
+		container.NewBorder(nil, nil, widget.NewLabel("Included Paths:"), t.currentWorkspaceLabel, nil),
+		t.includedPathsLabel,
 		widget.NewSeparator(),
 		widget.NewLabel("Excluded Paths:"), t.excludedPathsLabel,
 		container.NewHBox(browseBtn, openLocationsBtn, t.workspaceSelect),
@@ -667,7 +675,20 @@ func (t *startTab) selectWorkspace(name string) {
 		return
 	}
 	t.app.locations.applyWorkspace(w)
+	t.setCurrentWorkspaceName(name)
 	t.refreshLocationSummary()
+}
+
+// setCurrentWorkspaceName updates the Included Paths row's workspace-name
+// label -- called both here (the Start tab's own quick-select) and from
+// locationsTab.loadSelectedWorkspace (the Workspace Builder tab's Load
+// button), so the label stays accurate no matter which tab a workspace was
+// actually loaded from.
+func (t *startTab) setCurrentWorkspaceName(name string) {
+	if t.currentWorkspaceLabel == nil {
+		return
+	}
+	t.currentWorkspaceLabel.SetText(name)
 }
 
 // refreshWorkspaces reloads the quick-select's options from the store --
@@ -727,17 +748,17 @@ func (t *startTab) quickBrowse() {
 // searched, on its own line -- full local roots (not just a truncated "and
 // N more"), shown with the same friendly drive names the Workspace
 // Builder tree itself uses (see drivePicker.driveLabel) rather than raw
-// mount paths, plus every checked SMB/NFS share by name.
+// mount paths, plus every checked SMB/NFS share by name. Local search has
+// no on/off toggle of its own (see locationsTab's own doc comment), so it's
+// always included here.
 func (t *startTab) includedLocationLines() []string {
 	var lines []string
-	if t.app.locations.localCheck.Checked {
-		roots, _ := t.app.locations.picker.selectedRootsAndExcludes()
-		if len(roots) == 0 {
-			lines = append(lines, "•  All local drives")
-		} else {
-			for _, r := range roots {
-				lines = append(lines, "•  "+t.app.locations.picker.driveLabel(r))
-			}
+	roots, _ := t.app.locations.picker.selectedRootsAndExcludes()
+	if len(roots) == 0 {
+		lines = append(lines, "•  All local drives")
+	} else {
+		for _, r := range roots {
+			lines = append(lines, "•  "+t.app.locations.picker.driveLabel(r))
 		}
 	}
 	if t.app.locations.smbCheck.Checked {
@@ -746,21 +767,17 @@ func (t *startTab) includedLocationLines() []string {
 	if t.app.locations.nfsCheck.Checked {
 		lines = append(lines, t.selectedShareLines("nfs", "NFS exports (none selected yet -- see Workspace Builder)")...)
 	}
-	if len(lines) == 0 {
-		lines = []string{"(nothing selected -- see Workspace Builder)"}
-	}
 	return lines
 }
 
 // excludedLocationLines lists every subfolder explicitly unchecked
 // underneath an otherwise-included local root (see
 // drivePicker.selectedRootsAndExcludes) -- there's no equivalent concept
-// for SMB/NFS shares, which are either searched whole or not checked at
-// all.
+// for NFS exports, which are either searched whole or not checked at all;
+// SMB shares can narrow to a subfolder too, but that's shown implicitly by
+// which specific share line appears above rather than as its own excluded
+// line here.
 func (t *startTab) excludedLocationLines() []string {
-	if !t.app.locations.localCheck.Checked {
-		return []string{"(none)"}
-	}
 	_, excludes := t.app.locations.picker.selectedRootsAndExcludes()
 	if len(excludes) == 0 {
 		return []string{"(none)"}
@@ -777,8 +794,8 @@ func (t *startTab) excludedLocationLines() []string {
 // that location type is turned on but nothing's been checked yet.
 func (t *startTab) selectedShareLines(kind, noneMsg string) []string {
 	var lines []string
-	for _, item := range t.app.locations.shareItems {
-		if item.kind == kind && t.app.locations.selectedShareKeys[item.key()] {
+	for _, item := range t.app.locations.sharePicker.SelectedShares() {
+		if item.kind == kind {
 			lines = append(lines, "•  "+item.label())
 		}
 	}

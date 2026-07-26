@@ -269,14 +269,15 @@ func TestAccentColorEmptyIsOmitted(t *testing.T) {
 func TestWorkspacesRoundTrip(t *testing.T) {
 	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
 	cfg.Workspaces["Work"] = LocationWorkspace{
-		Name:        "Work",
-		SearchLocal: true,
-		SearchSMB:   true,
-		SearchNFS:   false,
-		LocalRoots:  []string{"/home/user/Work", "/home/user/Projects"},
-		ExcludeDirs: []string{"/home/user/Work/tmp"},
-		SMBShares:   []string{"fileserver:projects", "fileserver:archive"},
-		NFSExports:  nil,
+		Name:             "Work",
+		SearchLocal:      true,
+		SearchSMB:        true,
+		SearchNFS:        false,
+		LocalRoots:       []string{"/home/user/Work", "/home/user/Projects"},
+		ExcludeDirs:      []string{"/home/user/Work/tmp"},
+		SMBShares:        []string{"fileserver:projects", "fileserver:archive"},
+		NFSExports:       nil,
+		SMBShareExcludes: []string{"fileserver:projects:old-drafts"},
 	}
 	cfg.Workspaces["Personal"] = LocationWorkspace{
 		Name:        "Personal",
@@ -311,7 +312,65 @@ func TestWorkspacesEmptyListsRoundTripAsNil(t *testing.T) {
 	if !ok {
 		t.Fatal("expected \"Bare\" workspace to load")
 	}
-	if w.LocalRoots != nil || w.ExcludeDirs != nil || w.SMBShares != nil || w.NFSExports != nil {
+	if w.LocalRoots != nil || w.ExcludeDirs != nil || w.SMBShares != nil || w.NFSExports != nil || w.SMBShareExcludes != nil {
 		t.Errorf("expected all list fields nil for an empty workspace, got %+v", w)
+	}
+}
+
+// TestWorkspacesPreSMBShareExcludesStillLoad guards backward compatibility:
+// a workspace saved before SMBShareExcludes existed has exactly 7
+// pipe-delimited parts on disk, not 8 -- it must still load cleanly, just
+// with that field left empty, rather than being silently dropped.
+func TestWorkspacesPreSMBShareExcludesStillLoad(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.ini")
+	iniContent := "[Workspaces]\nOld = 1|1|0|/home/user/Work|" +
+		"/home/user/Work/tmp|fileserver:projects|\n"
+	if err := os.WriteFile(path, []byte(iniContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, ok := cfg.Workspaces["Old"]
+	if !ok {
+		t.Fatal("expected \"Old\" workspace to load from a pre-SMBShareExcludes 7-part value")
+	}
+	if w.SMBShareExcludes != nil {
+		t.Errorf("SMBShareExcludes = %+v, want nil for a legacy 7-part workspace", w.SMBShareExcludes)
+	}
+	if !w.SearchLocal || !w.SearchSMB || w.SearchNFS {
+		t.Errorf("flags = %+v, want SearchLocal/SearchSMB true, SearchNFS false", w)
+	}
+}
+
+func TestLastScanCIDRRoundTrip(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	cfg.LastScanCIDR = "192.168.1.0/24"
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.LastScanCIDR != "192.168.1.0/24" {
+		t.Errorf("LastScanCIDR = %q, want %q", reloaded.LastScanCIDR, "192.168.1.0/24")
+	}
+}
+
+func TestLastScanCIDREmptyIsOmitted(t *testing.T) {
+	cfg := New(filepath.Join(t.TempDir(), "config.ini"))
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load(cfg.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.LastScanCIDR != "" {
+		t.Errorf("LastScanCIDR = %q, want empty", reloaded.LastScanCIDR)
 	}
 }

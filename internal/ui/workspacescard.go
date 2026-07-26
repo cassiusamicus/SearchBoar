@@ -60,39 +60,40 @@ func workspaceNames(list []config.LocationWorkspace) []string {
 func (t *locationsTab) currentWorkspaceSnapshot() config.LocationWorkspace {
 	roots, excludes := t.picker.selectedRootsAndExcludes()
 
-	var smbShares, nfsExports []string
-	for _, item := range t.shareItems {
-		if !t.selectedShareKeys[item.key()] {
-			continue
-		}
+	var smbShares, nfsExports, smbShareExcludes []string
+	for _, item := range t.sharePicker.SelectedShares() {
 		ref := item.host + ":" + item.name
 		if item.kind == "smb" {
 			smbShares = append(smbShares, ref)
+			for _, sub := range t.sharePicker.ExcludeSubpaths(item) {
+				smbShareExcludes = append(smbShareExcludes, item.host+":"+item.name+":"+sub)
+			}
 		} else {
 			nfsExports = append(nfsExports, ref)
 		}
 	}
 
 	return config.LocationWorkspace{
-		SearchLocal: t.localCheck.Checked,
-		SearchSMB:   t.smbCheck.Checked,
-		SearchNFS:   t.nfsCheck.Checked,
-		LocalRoots:  roots,
-		ExcludeDirs: excludes,
-		SMBShares:   smbShares,
-		NFSExports:  nfsExports,
+		SearchLocal:      true,
+		SearchSMB:        t.smbCheck.Checked,
+		SearchNFS:        t.nfsCheck.Checked,
+		LocalRoots:       roots,
+		ExcludeDirs:      excludes,
+		SMBShares:        smbShares,
+		NFSExports:       nfsExports,
+		SMBShareExcludes: smbShareExcludes,
 	}
 }
 
 // applyWorkspace replaces the tab's current location selection with w's.
-// Selected SMB/NFS shares are remembered by (host, name) key regardless of
-// whether they're in the current shareItems list (nothing's been scanned
-// yet this session, or a scan just hasn't found that host) -- they'll show
-// as checked automatically once a matching scan populates the share list,
-// consistent with the rest of this tab's explicit-opt-in-only design for
-// network shares (see scanShares' doc comment).
+// Selected SMB/NFS shares (and their excluded subfolders) are remembered by
+// key regardless of whether they're in the current share tree (nothing's
+// been scanned yet this session, or a scan just hasn't found that host
+// again) -- see sharePicker.ApplyPending, which shows them checked
+// automatically once a matching scan populates the share tree, consistent
+// with the rest of this tab's explicit-opt-in-only design for network
+// shares (see scanShares' doc comment).
 func (t *locationsTab) applyWorkspace(w config.LocationWorkspace) {
-	t.localCheck.SetChecked(w.SearchLocal)
 	t.smbCheck.SetChecked(w.SearchSMB)
 	t.nfsCheck.SetChecked(w.SearchNFS)
 
@@ -107,20 +108,29 @@ func (t *locationsTab) applyWorkspace(w config.LocationWorkspace) {
 		t.picker.tree.Refresh()
 	}
 
-	t.selectedShareKeys = map[string]bool{}
+	selected := map[string]bool{}
 	for _, ref := range w.SMBShares {
 		if host, name, ok := splitHostRef(ref); ok {
-			t.selectedShareKeys[networkShareItem{kind: "smb", host: host, name: name}.key()] = true
+			selected[networkShareItem{kind: "smb", host: host, name: name}.key()] = true
 		}
 	}
 	for _, ref := range w.NFSExports {
 		if host, name, ok := splitHostRef(ref); ok {
-			t.selectedShareKeys[networkShareItem{kind: "nfs", host: host, name: name}.key()] = true
+			selected[networkShareItem{kind: "nfs", host: host, name: name}.key()] = true
 		}
 	}
-	if t.shareList != nil {
-		t.shareList.Refresh()
+	excludes := map[string][]string{}
+	for _, ref := range w.SMBShareExcludes {
+		host, name, sub, ok := splitShareExcludeRef(ref)
+		if !ok {
+			continue
+		}
+		key := networkShareItem{kind: "smb", host: host, name: name}.key()
+		excludes[key] = append(excludes[key], sub)
 	}
+	t.sharePicker.ApplyPending(selected, excludes)
+
+	t.refreshSelectedColumn()
 }
 
 func splitHostRef(ref string) (host, name string, ok bool) {
@@ -129,6 +139,17 @@ func splitHostRef(ref string) (host, name string, ok bool) {
 		return "", "", false
 	}
 	return ref[:idx], ref[idx+1:], true
+}
+
+// splitShareExcludeRef splits a "host:share:subpath" SMBShareExcludes entry
+// on its first two colons only, leaving the subpath (the part after the
+// second colon) untouched even if it contains further colons itself.
+func splitShareExcludeRef(ref string) (host, share, subpath string, ok bool) {
+	parts := strings.SplitN(ref, ":", 3)
+	if len(parts) != 3 {
+		return "", "", "", false
+	}
+	return parts[0], parts[1], parts[2], true
 }
 
 func (t *locationsTab) promptSaveWorkspace() {
@@ -170,6 +191,7 @@ func (t *locationsTab) loadSelectedWorkspace() {
 		return
 	}
 	t.applyWorkspace(w)
+	t.app.start.setCurrentWorkspaceName(name)
 	t.app.setStatus("Loaded workspace \"" + name + "\"")
 }
 

@@ -70,10 +70,6 @@ func (a *App) searchOptionsTemplate() search.Options {
 }
 
 func (a *App) startSearch() {
-	if !a.locations.anyLocationSelected() {
-		a.setStatus("No search location selected (see Workspace Builder tab)")
-		return
-	}
 	if a.cancelSearch != nil {
 		a.cancelSearch() // a search is already running; cancel it before starting a new one
 	}
@@ -284,6 +280,8 @@ func (a *App) runUnifiedSearch(ctx context.Context, base search.Options, locOpts
 		opts.Dir = root.Path
 		if root.DisplayPrefix == "" {
 			opts.ExcludeDirs = a.locations.excludeDirsFor(root.Path)
+		} else {
+			opts.ExcludeDirs = a.locations.excludeDirsForShare(root.DisplayPrefix, root.Path)
 		}
 
 		if err := a.runOneRoot(ctx, opts, root, i+1, len(roots), clearCacheSeedOnce); err != nil {

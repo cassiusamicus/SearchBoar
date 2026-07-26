@@ -34,6 +34,11 @@ type Config struct {
 	Workspaces            map[string]LocationWorkspace
 	AccentColor           string // hex, e.g. "#225167"; empty = theme default
 	ThemeMode             string // "dark" or "light"; empty = dark (default)
+	// LastScanCIDR is the network range from the most recent *successful*
+	// Scan for Shares (found at least one host), used to prefill the CIDR
+	// field next time instead of always falling back to
+	// netsearch.DetectLocalCIDR's guess.
+	LastScanCIDR string
 }
 
 type RecentConfig struct {
@@ -108,6 +113,11 @@ type LocationWorkspace struct {
 	ExcludeDirs []string
 	SMBShares   []string // "host:share"
 	NFSExports  []string // "host:export"
+	// SMBShareExcludes are share-relative subfolders explicitly unchecked
+	// underneath an otherwise-checked SMB share, "host:share:subpath" --
+	// the network equivalent of ExcludeDirs, which does the same job for
+	// LocalRoots.
+	SMBShareExcludes []string
 }
 
 // DefaultPath returns ~/.config/searchboar/config.ini, matching the
@@ -161,6 +171,7 @@ func Load(path string) (*Config, error) {
 	cfg.loadRecentResults(doc)
 	cfg.loadWorkspaces(doc)
 	cfg.loadAppearance(doc)
+	cfg.loadNetwork(doc)
 	return cfg, nil
 }
 
@@ -181,6 +192,7 @@ func (c *Config) Save() error {
 	c.saveRecentResults(doc)
 	c.saveWorkspaces(doc)
 	c.saveAppearance(doc)
+	c.saveNetwork(doc)
 
 	tmp, err := os.CreateTemp(filepath.Dir(c.path), ".config-*.ini.tmp")
 	if err != nil {
